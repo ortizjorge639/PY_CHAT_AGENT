@@ -52,7 +52,6 @@ stages:
         pip install --force-reinstall --no-deps /tmp/crypto_fix/cryptography*.whl
       displayName: 'Install Python dependencies'
       workingDirectory: '$(Build.SourcesDirectory)'
-
     - task: ArchiveFiles@2
       displayName: 'Zip app into deployable package'
       inputs:
