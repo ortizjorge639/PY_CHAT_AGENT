@@ -1,0 +1,25 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.19",
+  "version": "1.0.0",
+  "id": "<your-app-id-from-entra>",
+  "developer": {
+    "name": "Your Team",
+    "websiteUrl": "https://example.com",
+    "privacyUrl": "https://example.com/privacy",
+    "termsOfUseUrl": "https://example.com/terms"
+  },
+  "name": { "short": "Contoso Data Bot" },
+  "description": {
+    "short": "Ask questions about component replacement data",
+    "full": "A conversational bot that answers natural language questions about Contoso component data."
+  },
+  "icons": { "outline": "outline.png", "color": "color.png" },
+  "accentColor": "#FFFFFF",
+  "bots": [
+    {
+      "botId": "<your-app-id-from-entra>",
+      "scopes": ["personal", "team", "groupChat"]
+    }
+  ]
+}
