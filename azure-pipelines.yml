@@ -51,12 +51,12 @@ stages:
           -d /tmp/crypto_fix
         pip install --force-reinstall --no-deps /tmp/crypto_fix/cryptography*.whl
       displayName: 'Install Python dependencies'
-      workingDirectory: '$(Build.SourcesDirectory)/chat_agent'
+      workingDirectory: '$(Build.SourcesDirectory)'
 
     - task: ArchiveFiles@2
       displayName: 'Zip app into deployable package'
       inputs:
-        rootFolderOrFile: '$(Build.SourcesDirectory)/chat_agent'
+        rootFolderOrFile: '$(Build.SourcesDirectory)'
         includeRootFolder: false
         archiveType: 'zip'
         archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
