@@ -122,6 +122,7 @@ class AgentKernel:
             data_buffer=self._data_buffer,
             file_buffer=self._file_buffer,
             last_result=self._last_result_buffer,
+            base_url=settings.base_url,
         )
 
         # Build system prompt

@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     microsoft_app_password: str = ""
     microsoft_app_tenant_id: str = ""
     bot_port: int = 3978
+    base_url: str = ""  # e.g. https://fobsolescence-chat.extron.com
 
     # Access control
     require_auth: bool = False

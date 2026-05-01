@@ -112,6 +112,7 @@ def create_data_tools(
     data_buffer: list,
     file_buffer: list,
     last_result: dict,
+    base_url: str = "",
 ) -> List[Callable[..., str]]:
     """Factory returning SQL-backed data tools for Agent Framework."""
  
@@ -305,10 +306,11 @@ def create_data_tools(
         df.to_excel(filepath, index=False, engine="openpyxl")
         logger.info("Generated Excel: %s (%d rows)", filename, len(rows))
  
+        file_url = f"{base_url}/api/files/{filename}" if base_url else f"/api/files/{filename}"
         file_buffer.append(
             {
                 "name": filename,
-                "path": f"/api/files/{filename}",
+                "path": file_url,
             }
         )
  

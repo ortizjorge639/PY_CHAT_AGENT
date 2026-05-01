@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # ── Easy Auth helpers ───────────────────────────────────
 EASY_AUTH_HEADER = "X-MS-CLIENT-PRINCIPAL-ID"
 EASY_AUTH_PRINCIPAL = "X-MS-CLIENT-PRINCIPAL"
-AUTH_EXEMPT_PATHS = {"/api/messages"}
+AUTH_EXEMPT_PATHS = {"/api/messages", "/robots933456.txt"}
 
 
 def _get_user_group_ids(request: web.Request) -> set[str]:
