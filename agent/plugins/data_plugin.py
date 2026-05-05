@@ -1,218 +1,334 @@
-"""Data access tools for the Microsoft Agent Framework.
-
-Each function is a plain callable passed to Agent(tools=[...]).
-The AF infers the tool schema from type hints, Annotated metadata, and docstrings.
 """
-
+Data access tools for the Microsoft Agent Framework.
+ 
+All tools operate on SQL-backed tables via DataLoader.
+Results are returned inline by default.
+Excel files are generated ONLY when explicitly requested by the user.
+"""
+ 
 import json
 import logging
 import os
-from typing import Annotated
+from typing import Annotated, Callable, List, Optional
 from uuid import uuid4
-
+ 
 import pandas as pd
 from pydantic import Field
-
+ 
 from data.loader import DataLoader, CHUNK_SIZE
-
+ 
 logger = logging.getLogger(__name__)
-
-# Use /tmp for generated files so runFromPackage (read-only wwwroot) works.
-# Falls back to local ./generated for local dev.
+ 
+# -------------------------------------------------------------------
+# Configuration
+# -------------------------------------------------------------------
+ 
 GENERATED_DIR = os.environ.get(
     "GENERATED_DIR",
     os.path.join(os.path.dirname(__file__), "..", "..", "generated"),
 )
-MAX_INLINE_ROWS = 200  # Beyond this, skip chat display and offer Excel only
-
-
-def _rows_to_chunks(rows: list[dict], columns: list[str]) -> list[str]:
-    """Split rows into markdown table chunks of CHUNK_SIZE rows each."""
+MAX_INLINE_ROWS: Optional[int] = None  # None = no auto-excel fallback
+ 
+VALID_STATUS_VALUES = {
+    "NOT eligible for scrap - Bin Location-[SHOW]",
+    "Component Request - Please review Logid",
+    "No stock",
+    "Product USAGE",
+    "In WhereUsed with parent",
+    "NOT eligible for scrap - Bin Stock",
+    "NOT eligible for scrap - NOT A PHYSICAL PART",
+    "May be eligible to be scrapped",
+    "Need Further Review-NO BOM",
+    "Sold in Past Two Years",
+    "Open WorkOrder",
+    "Open Sales Order",
+    "NOT eligible for scrap - Custom Button",
+    "REPAIR USAGE- Need Further review",
+    "NOT eligible for scrap - International Powercord",
+}
+ 
+# -------------------------------------------------------------------
+# Helper functions
+# -------------------------------------------------------------------
+ 
+def _rows_to_chunks(rows: List[dict], columns: List[str]) -> List[str]:
+    """Convert rows to markdown tables with chunking and NaN cleanup."""
     if not rows:
         return []
-
-    chunks = []
+ 
+    chunks: List[str] = []
     total = len(rows)
+ 
     for i in range(0, total, CHUNK_SIZE):
-        chunk_rows = rows[i : i + CHUNK_SIZE]
-        df = pd.DataFrame(chunk_rows, columns=columns)
-        md_table = df.to_markdown(index=False)
+        df = pd.DataFrame(rows[i : i + CHUNK_SIZE])
+        df = df.reindex(columns=columns)
+        df = df.where(pd.notna(df), "")
+ 
         header = f"**Rows {i + 1}–{min(i + CHUNK_SIZE, total)} of {total}**\n\n"
-        chunks.append(header + md_table)
-
+        chunks.append(header + df.to_markdown(index=False))
+ 
     return chunks
-
-
-def _generate_excel(rows: list[dict], columns: list[str], table_name: str) -> dict:
-    """Save rows to an Excel file and return file metadata."""
-    os.makedirs(GENERATED_DIR, exist_ok=True)
-    filename = f"{table_name}_{uuid4().hex[:8]}.xlsx"
-    filepath = os.path.join(GENERATED_DIR, filename)
-    df = pd.DataFrame(rows, columns=columns)
-    df.to_excel(filepath, index=False)
-    logger.info("Generated Excel: %s (%d rows)", filename, len(rows))
-    return {"name": filename, "path": f"/api/files/{filename}"}
-
-
-def create_data_tools(
-    loader: DataLoader, data_buffer: list, file_buffer: list, last_result: dict
-) -> list:
-    """Factory that returns tool callables bound to *loader*.
-    *data_buffer* collects markdown chunks for direct delivery to the user.
-    *file_buffer* collects generated file metadata for download links.
-    *last_result* stores the last query result for on-demand Excel download.
-    Both bypass the LLM to save tokens."""
-
-    def list_tables() -> str:
-        """List every available data table together with its column names and
-        data types. Call this first to discover what data is available."""
-        tables = loader.list_tables()
-        schemas = {t: loader.get_schema(t) for t in tables}
-        return json.dumps(schemas, indent=2, default=str)
-
-    def get_schema(
-        table_name: Annotated[str, Field(description="Name of the table to inspect")],
-    ) -> str:
-        """Get column names and data types for a specific table."""
-        schema = loader.get_schema(table_name)
-        return json.dumps(schema, indent=2)
-
-    def count_rows(
-        table_name: Annotated[str, Field(description="Name of the table")],
-        filter_column: Annotated[str, Field(description="Column to filter by (optional)")] = "",
-        filter_value: Annotated[str, Field(description="Value to match (optional)")] = "",
-    ) -> str:
-        """Count the total number of rows in a table. Optionally filter by a
-        single column value. Always returns the exact count."""
-        fc = filter_column or None
-        fv = filter_value or None
-        count = loader.count_rows(table_name, fc, fv)
+ 
+ 
+def _validate_status_filter(
+    filter_column: Optional[str],
+    filter_value: Optional[str],
+) -> Optional[str]:
+    """Validate Status filter values against the canonical enum."""
+    if filter_column == "Status" and filter_value not in VALID_STATUS_VALUES:
         return json.dumps(
-            {"table": table_name, "count": count, "filter_column": fc, "filter_value": fv}
+            {
+                "error": "Invalid Status value",
+                "allowed_values": sorted(VALID_STATUS_VALUES),
+            },
+            indent=2,
+        )
+    return None
+ 
+ 
+def _store_last_result(
+    last_result: dict,
+    table_name: str,
+    rows: List[dict],
+    columns: List[str],
+) -> None:
+    """Persist last query result for conversational Excel exports."""
+    last_result.clear()
+    last_result.update(
+        {
+            "table": table_name,
+            "rows": rows,
+            "columns": columns,
+        }
+    )
+ 
+ 
+# -------------------------------------------------------------------
+# Tool factory
+# -------------------------------------------------------------------
+ 
+def create_data_tools(
+    loader: DataLoader,
+    data_buffer: list,
+    file_buffer: list,
+    last_result: dict,
+    base_url: str = "",
+) -> List[Callable[..., str]]:
+    """Factory returning SQL-backed data tools for Agent Framework."""
+ 
+    def list_tables() -> str:
+        """List all available tables and their schemas."""
+        return json.dumps(
+            {t: loader.get_schema(t) for t in loader.list_tables()},
+            indent=2,
+            default=str,
+        )
+ 
+    def get_schema(
+        table_name: Annotated[str, Field(description="Table name")],
+    ) -> str:
+        """Get column names and types for a table."""
+        return json.dumps(loader.get_schema(table_name), indent=2, default=str)
+ 
+    def count_rows(
+        table_name: Annotated[str, Field(description="Table name")],
+        filter_column: Annotated[str, Field(description="Optional filter column")] = "",
+        filter_value: Annotated[str, Field(description="Optional filter value")] = "",
+    ) -> str:
+        """Return the exact number of rows matching the filter."""
+        fc, fv = filter_column or None, filter_value or None
+        error = _validate_status_filter(fc, fv)
+        if error:
+            return error
+ 
+        return json.dumps(
+            {
+                "table": table_name,
+                "count": loader.count_rows(table_name, fc, fv),
+                "filter_column": fc,
+                "filter_value": fv,
+            },
+            indent=2,
         )
 
     def get_rows(
-        table_name: Annotated[str, Field(description="Name of the table")],
-        filter_column: Annotated[str, Field(description="Column to filter by (optional)")] = "",
-        filter_value: Annotated[str, Field(description="Value to match (optional)")] = "",
+        table_name: Annotated[str, Field(description="Table name")],
+        filter_column: Annotated[str, Field(description="Optional filter column")] = "",
+        filter_value: Annotated[str, Field(description="Optional filter value")] = "",
     ) -> str:
-        """Return rows from a table with optional single-column filter.
-        The full data is sent directly to the user as inline messages.
-        This tool returns only a summary for your reference — do NOT
-        fabricate or repeat the data. The user can request an Excel
-        download separately."""
-        fc = filter_column or None
-        fv = filter_value or None
+        """
+        Retrieve rows and return them inline as markdown tables.
+        This tool does NOT generate Excel files.
+        """
+        fc, fv = filter_column or None, filter_value or None
+        error = _validate_status_filter(fc, fv)
+        if error:
+            return error
+ 
         result = loader.get_rows(table_name, fc, fv)
-        # Store for on-demand download
-        last_result.clear()
-        last_result["rows"] = result["rows"]
-        last_result["columns"] = result["columns"]
-        last_result["table"] = table_name
+        if result["total"] == 0:
+            return "No rows matched."
+ 
+        _store_last_result(
+            last_result,
+            table_name,
+            result["rows"],
+            result["columns"],
+        )
+ 
         cols = ", ".join(result["columns"])
-
-        if result["total"] > MAX_INLINE_ROWS:
-            # Too many rows for chat — auto-generate Excel instead
-            file_info = _generate_excel(result["rows"], result["columns"], table_name)
-            file_buffer.append(file_info)
-            return (
-                f"Retrieved {result['total']} rows from table '{table_name}' "
-                f"(columns: {cols}). That's too many to display inline, so the "
-                f"data has been exported to a downloadable Excel file instead."
-            )
-
-        chunks = _rows_to_chunks(result["rows"], result["columns"])
-        data_buffer.extend(chunks)
+        data_buffer.extend(
+            _rows_to_chunks(result["rows"], result["columns"])
+        )
         return (
             f"Retrieved {result['total']} rows from table '{table_name}' "
             f"(columns: {cols}). Data has been sent directly to the user "
-            f"as inline messages. If the user wants a downloadable Excel file, "
-            f"call download_as_excel."
+            f"as inline messages. Do NOT fabricate or repeat the data. "
+            f"If the user wants a downloadable Excel file, call export_to_excel."
         )
 
     def get_distinct_values(
-        table_name: Annotated[str, Field(description="Name of the table")],
-        column: Annotated[str, Field(description="Column to get distinct values from")],
+        table_name: Annotated[str, Field(description="Table name")],
+        column: Annotated[str, Field(description="Column name")],
     ) -> str:
-        """Get every unique value in a column (sorted, nulls excluded)."""
-        values = loader.get_distinct_values(table_name, column)
-        return json.dumps(values, default=str)
+        """Return sorted distinct values for a column."""
+        if column == "Status":
+            return json.dumps(sorted(VALID_STATUS_VALUES), indent=2)
+ 
+        return json.dumps(
+            loader.get_distinct_values(table_name, column),
+            indent=2,
+            default=str,
+        )
 
     def query_table(
-        table_name: Annotated[str, Field(description="Name of the table")],
-        query_expr: Annotated[str, Field(description="Pandas DataFrame.query() expression")],
+        table_name: Annotated[str, Field(description="Table name")],
+        query_expr: Annotated[
+            str, Field(description="Pandas DataFrame.query() expression")
+        ],
     ) -> str:
-        """Run a pandas query expression on a table.
-        Examples: 'Age > 30', 'Status == "Active"',
-        'Salary > 50000 and Department == "Engineering"'.
-        The full data is sent directly to the user as inline messages.
-        This tool returns only a summary for your reference — do NOT
-        fabricate or repeat the data."""
+        """
+        Run a pandas-style query expression.
+        Results are returned inline.
+        """
         result = loader.query_table(table_name, query_expr)
-        # Store for on-demand download
-        last_result.clear()
-        last_result["rows"] = result["rows"]
-        last_result["columns"] = result["columns"]
-        last_result["table"] = table_name
+        if result["total"] == 0:
+            return "No rows matched."
+ 
+        _store_last_result(
+            last_result,
+            table_name,
+            result["rows"],
+            result["columns"],
+        )
+ 
         cols = ", ".join(result["columns"])
-
-        if result["total"] > MAX_INLINE_ROWS:
-            file_info = _generate_excel(result["rows"], result["columns"], table_name)
-            file_buffer.append(file_info)
-            return (
-                f"Retrieved {result['total']} rows from table '{table_name}' "
-                f"(columns: {cols}). That's too many to display inline, so the "
-                f"data has been exported to a downloadable Excel file instead."
-            )
-
-        chunks = _rows_to_chunks(result["rows"], result["columns"])
-        data_buffer.extend(chunks)
+        data_buffer.extend(
+            _rows_to_chunks(result["rows"], result["columns"])
+        )
         return (
             f"Retrieved {result['total']} rows from table '{table_name}' "
             f"(columns: {cols}). Data has been sent directly to the user "
-            f"as inline messages. If the user wants a downloadable Excel file, "
-            f"call download_as_excel."
+            f"as inline messages. Do NOT fabricate or repeat the data. "
+            f"If the user wants a downloadable Excel file, call export_to_excel."
         )
 
     def group_by(
-        table_name: Annotated[str, Field(description="Name of the table")],
-        group_column: Annotated[str, Field(description="Column to group by")],
-        agg_column: Annotated[str, Field(description="Column to aggregate (optional — omit to count rows)")] = "",
-        agg_func: Annotated[str, Field(description="Aggregation: count, sum, mean, min, max (default count)")] = "count",
+        table_name: Annotated[str, Field(description="Table name")],
+        group_column: Annotated[str, Field(description="Group-by column")],
+        agg_column: Annotated[
+            str, Field(description="Column to aggregate (optional)")
+        ] = "",
+        agg_func: Annotated[
+            str, Field(description="count, sum, mean, min, max")
+        ] = "count",
     ) -> str:
-        """Group rows by a column and aggregate. Use for summaries, breakdowns,
-        and category counts. If agg_column is omitted, counts rows per group."""
-        ac = agg_column or None
-        result = loader.group_by(table_name, group_column, ac, agg_func)
-        return json.dumps(result, indent=2, default=str)
-
-    def download_as_excel(
-        table_name: Annotated[str, Field(description="Name of the table to export")] = "",
-        filter_column: Annotated[str, Field(description="Column to filter by (optional)")] = "",
-        filter_value: Annotated[str, Field(description="Value to match (optional)")] = "",
+        """Group and aggregate rows."""
+        return json.dumps(
+            loader.group_by(
+                table_name,
+                group_column,
+                agg_column or None,
+                agg_func,
+            ),
+            indent=2,
+            default=str,
+        )
+ 
+    def export_to_excel(
+        table_name: Annotated[str, Field(description="Table name (optional)")] = "",
+        filter_column: Annotated[str, Field(description="Optional filter column")] = "",
+        filter_value: Annotated[str, Field(description="Optional filter value")] = "",
     ) -> str:
-        """Generate a downloadable Excel file. Only call when the user explicitly
-        asks for a file download or export.
-        If a previous get_rows/query_table result exists, it exports that.
-        Otherwise, provide table_name (and optional filter) to generate fresh."""
+        """
+        Generate an Excel file.
+ 
+        ONLY call this tool when the user explicitly asks for:
+        - an Excel file
+        - a spreadsheet
+        - a download
+        - an export
+ 
+        If a previous query exists, that data is exported.
+        Otherwise, a fresh query is executed.
+        """
+ 
+        # Case 1: Export previously retrieved data
         if last_result and "rows" in last_result:
-            file_info = _generate_excel(
-                last_result["rows"], last_result["columns"], last_result.get("table", "data")
-            )
-            file_buffer.append(file_info)
-            row_count = len(last_result['rows'])
-            last_result.clear()
-            return f"Excel file generated: {file_info['name']} ({row_count} rows)"
+            rows = last_result["rows"]
+            columns = last_result["columns"]
+            table = last_result.get("table", "data")
+ 
+        # Case 2: Fresh query
+        else:
+            if not table_name:
+                return "No previous data available. Please specify a table to export."
+ 
+            fc, fv = filter_column or None, filter_value or None
+            error = _validate_status_filter(fc, fv)
+            if error:
+                return error
+ 
+            result = loader.get_rows(table_name, fc, fv)
+            if result["total"] == 0:
+                return "No matching rows. Excel not created."
+ 
+            rows = result["rows"]
+            columns = result["columns"]
+            table = table_name
+ 
+        os.makedirs(GENERATED_DIR, exist_ok=True)
+        filename = f"{table}_{uuid4().hex[:8]}.xlsx"
+        filepath = os.path.join(GENERATED_DIR, filename)
 
-        if not table_name:
-            return "No recent query results and no table specified. Provide a table_name."
-
-        fc = filter_column or None
-        fv = filter_value or None
-        result = loader.get_rows(table_name, fc, fv)
-        file_info = _generate_excel(result["rows"], result["columns"], table_name)
-        file_buffer.append(file_info)
-        return f"Excel file generated: {file_info['name']} ({result['total']} rows)"
-
-    return [list_tables, get_schema, count_rows, get_rows,
-            get_distinct_values, query_table, group_by, download_as_excel]
+        df = pd.DataFrame(rows).reindex(columns=columns)
+        df = df.where(pd.notna(df), "")
+        df.to_excel(filepath, index=False, engine="openpyxl")
+        logger.info("Generated Excel: %s (%d rows)", filename, len(rows))
+ 
+        file_url = f"{base_url}/api/files/{filename}" if base_url else f"/api/files/{filename}"
+        file_buffer.append(
+            {
+                "name": filename,
+                "path": file_url,
+            }
+        )
+ 
+        row_count = len(rows)
+        last_result.clear()
+        return (
+            f"Excel file generated ({row_count} rows). "
+            f"The download link has been automatically sent to the user. "
+            f"Do NOT include any links, URLs, or file paths in your response."
+        )
+ 
+    return [
+        list_tables,
+        get_schema,
+        count_rows,
+        get_rows,
+        get_distinct_values,
+        query_table,
+        group_by,
+        export_to_excel,
+    ]

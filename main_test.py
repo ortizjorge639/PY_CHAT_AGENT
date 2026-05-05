@@ -18,7 +18,7 @@ from botbuilder.schema import Activity
 
 from config.settings import Settings
 from bot.bot_handler import ChatBot
-from agent.kernel_test import AgentKernel
+from agent.kernel import AgentKernel
 from data.loader import DataLoader
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")

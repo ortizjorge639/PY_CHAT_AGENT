@@ -2,7 +2,7 @@
   "$schema": "https://developer.microsoft.com/json-schemas/teams/v1.19/MicrosoftTeams.schema.json",
   "manifestVersion": "1.19",
   "version": "1.0.0",
-  "id": "<your-app-id-from-entra>",
+  "id": "8b5129f2-7a67-4e55-a8fd-db8ad4032246",
   "developer": {
     "name": "Your Team",
     "websiteUrl": "https://example.com",
@@ -18,7 +18,7 @@
   "accentColor": "#FFFFFF",
   "bots": [
     {
-      "botId": "<your-app-id-from-entra>",
+      "botId": "8b5129f2-7a67-4e55-a8fd-db8ad4032246",
       "scopes": ["personal", "team", "groupChat"]
     }
   ]
