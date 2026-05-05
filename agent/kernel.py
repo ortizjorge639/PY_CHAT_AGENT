@@ -6,6 +6,7 @@ import re
 from typing import Dict, Optional
 
 from agent_framework import Agent
+from agent_framework import ChatOptions
 from agent_framework.azure import AzureOpenAIChatClient
 
 from config.settings import Settings
@@ -23,18 +24,30 @@ Data sources:
 {table_roles}
 
 ----------------------------------------------------------------
+TABLE SCHEMAS
+----------------------------------------------------------------
+{table_schemas}
+
+----------------------------------------------------------------
 DOMAIN KNOWLEDGE
 ----------------------------------------------------------------
-- Each row represents exactly one unique PartNumber.
+- The primary table contains authoritative disposition/status data.
+  Each row represents exactly one unique PartNumber.
 - The Status column is authoritative and determines the disposition,
   eligibility, or restriction associated with a part.
 - The Details column provides additional explanation or structured context
   for the Status when such information is available.
-- When a user asks about a specific PartNumber, you MUST retrieve
-  the row using tools.
+- Supplemental tables contain metadata (replacements, confidence, etc.).
+- When a user asks about a specific PartNumber, ALWAYS call the
+  lookup_part tool FIRST. It searches all tables automatically.
+  NEVER use get_rows, query_table, or count_rows to look up a single part.
+- If the user asks for a row by a non-PartNumber identifier
+  (e.g. pklogid, LogDate), use get_row_by_id instead of query_table.
+- If a column exists in multiple tables, clarify which table you are
+  querying and why.
 
 ----------------------------------------------------------------
-AUTHORITATIVE STATUS VALUES (ENUM — EXACT MATCHING ONLY)
+AUTHORITATIVE STATUS VALUES (primary table — EXACT MATCHING ONLY)
 ----------------------------------------------------------------
 You must use ONLY the following Status values exactly as written:
 
@@ -74,12 +87,7 @@ SYSTEM CONSTRAINTS
 ----------------------------------------------------------------
 - Never contradict tool output.
 - Never invent data or business rules.
-
-Allowed columns:
-- PartNumber
-- Status
-- Details
-- ModelProcessedDate
+- NEVER invent column names. If unsure, call list_tables or get_schema first.
 
 ----------------------------------------------------------------
 OUTPUT REQUIREMENT
@@ -87,7 +95,10 @@ OUTPUT REQUIREMENT
 - Never return an empty response.
 """
 
-PART_NUMBER_PATTERN = re.compile(r"\b\d[\w\-]+\b")
+PART_NUMBER_PATTERN = re.compile(
+    r"\b(?:[A-Z]{1,3}-)?\d{2,}-\d{2,}-\d{2,}[A-Z]*\b",
+    re.IGNORECASE,
+)
 
 
 def extract_part_number(text: str) -> Optional[str]:
@@ -121,13 +132,23 @@ class AgentKernel:
             "\n".join(f"  - {t} ({r})" for t, r in roles.items())
             if roles else "  (no tables loaded)"
         )
+
+        schema_blocks = []
+        for tbl in data_loader.list_tables():
+            schema = data_loader.get_schema(tbl)
+            cols = ", ".join(f"{c} ({t})" for c, t in schema.items())
+            schema_blocks.append(f"  {tbl}: {cols}")
+        table_schemas_str = "\n".join(schema_blocks) if schema_blocks else "  (none)"
+
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-            table_roles=table_roles_str
+            table_roles=table_roles_str,
+            table_schemas=table_schemas_str,
         )
         self._agent = Agent(
             client=client,
             instructions=system_prompt,
             tools=tools,
+            default_options=ChatOptions(temperature=0),
         )
         self._sessions: Dict[str, object] = {}
         logger.info(
@@ -173,19 +194,18 @@ class AgentKernel:
             if is_part_query and rows:
                 rows = [
                     r for r in rows
-                    if r.get("PartNumber") == requested_part
+                    if str(r.get("PartNumber", "")).lower() == requested_part.lower()
                 ]
-            if is_part_query and not rows:
-                response_text = (
-                    "I could not find any data for the requested PartNumber, "
-                    "so I cannot determine whether it can be scrapped."
-                )
-            elif rows:
-                if len(rows) == 1:
-                    row = rows[0]
-                    part = row.get("PartNumber", "Unknown PartNumber")
-                    status = row.get("Status", "Unknown Status")
-                    raw_details = row.get("Details")
+            if is_part_query and rows:
+                # Find the primary-table row (has Status) for formatted response
+                primary_row = next((r for r in rows if r.get("Status")), None)
+                if model_text.strip():
+                    # Model produced a response from tool data — trust it
+                    response_text = model_text.strip()
+                elif primary_row:
+                    part = primary_row.get("PartNumber", "Unknown PartNumber")
+                    status = primary_row.get("Status")
+                    raw_details = primary_row.get("Details")
                     # NaN-safe: pandas stores SQL NULL as float('nan'), which is truthy — must check explicitly
                     details = ("" if raw_details is None or (isinstance(raw_details, float) and raw_details != raw_details) else str(raw_details)).strip()
                     if details and details.lower() != "nan":
@@ -198,15 +218,20 @@ class AgentKernel:
                             f"Part {part} has a status of \u201c{status}\u201d."
                         )
                 else:
-                    response_text = f"{len(rows)} records match your request."
+                    response_text = f"Data found for {requested_part}, but no Status field available."
+            elif is_part_query and not rows and not model_text.strip():
+                response_text = (
+                    "I could not find any data for the requested PartNumber, "
+                    "so I cannot determine whether it can be scrapped."
+                )
+            elif model_text.strip():
+                response_text = model_text.strip()
             elif files:
                 response_text = "The requested file has been generated."
-            elif model_text.strip() and not is_part_query:
-                response_text = model_text.strip()
             else:
                 response_text = "No data was returned."
             return {
                 "text": response_text,
-                "data_chunks": data_chunks if wants_list else [],
+                "data_chunks": data_chunks,
                 "files": files,
             }

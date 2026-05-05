@@ -20,10 +20,18 @@ class Settings(BaseSettings):
     sql_server: str = ""
     sql_port: str = "1433"
     sql_database: str = ""
-    sql_table: str = ""
+    sql_table: str = ""       # single table (backward-compat)
+    sql_tables: str = ""      # comma-separated list for multi-table
+    sql_primary_table: str = ""  # which table is primary (defaults to first)
     sql_trusted_connection: str = "yes"
     sql_username: str = ""
     sql_password: str = ""
+
+    @property
+    def sql_table_list(self) -> list[str]:
+        """Parse sql_tables (comma-separated) into a list, falling back to sql_table."""
+        raw = self.sql_tables or self.sql_table
+        return [t.strip() for t in raw.split(",") if t.strip()]
 
     # Azure OpenAI
     azure_openai_endpoint: str = ""

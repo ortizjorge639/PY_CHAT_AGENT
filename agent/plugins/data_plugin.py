@@ -73,9 +73,16 @@ def _rows_to_chunks(rows: List[dict], columns: List[str]) -> List[str]:
 def _validate_status_filter(
     filter_column: Optional[str],
     filter_value: Optional[str],
+    table_name: str = "",
+    primary_tables: Optional[set] = None,
 ) -> Optional[str]:
-    """Validate Status filter values against the canonical enum."""
-    if filter_column == "Status" and filter_value not in VALID_STATUS_VALUES:
+    """Validate Status filter values against the canonical enum (primary table only)."""
+    if filter_column != "Status" or not filter_value:
+        return None
+    # Only enforce the enum on primary tables
+    if primary_tables and table_name not in primary_tables:
+        return None
+    if filter_value not in VALID_STATUS_VALUES:
         return json.dumps(
             {
                 "error": "Invalid Status value",
@@ -115,7 +122,12 @@ def create_data_tools(
     base_url: str = "",
 ) -> List[Callable[..., str]]:
     """Factory returning SQL-backed data tools for Agent Framework."""
- 
+
+    # Identify primary tables for status validation scoping
+    _primary_tables = {
+        t for t, role in loader.get_table_roles().items() if role == "primary"
+    }
+
     def list_tables() -> str:
         """List all available tables and their schemas."""
         return json.dumps(
@@ -137,7 +149,7 @@ def create_data_tools(
     ) -> str:
         """Return the exact number of rows matching the filter."""
         fc, fv = filter_column or None, filter_value or None
-        error = _validate_status_filter(fc, fv)
+        error = _validate_status_filter(fc, fv, table_name, _primary_tables)
         if error:
             return error
  
@@ -161,7 +173,7 @@ def create_data_tools(
         This tool does NOT generate Excel files.
         """
         fc, fv = filter_column or None, filter_value or None
-        error = _validate_status_filter(fc, fv)
+        error = _validate_status_filter(fc, fv, table_name, _primary_tables)
         if error:
             return error
  
@@ -180,11 +192,18 @@ def create_data_tools(
         data_buffer.extend(
             _rows_to_chunks(result["rows"], result["columns"])
         )
+
+        # Include row data inline for small result sets so the model sees real values
+        inline = ""
+        if result["total"] <= 10:
+            inline = "\n" + json.dumps(result["rows"], indent=2, default=str)
+
         return (
             f"Retrieved {result['total']} rows from table '{table_name}' "
             f"(columns: {cols}). Data has been sent directly to the user "
             f"as inline messages. Do NOT fabricate or repeat the data. "
             f"If the user wants a downloadable Excel file, call export_to_excel."
+            f"{inline}"
         )
 
     def get_distinct_values(
@@ -226,11 +245,18 @@ def create_data_tools(
         data_buffer.extend(
             _rows_to_chunks(result["rows"], result["columns"])
         )
+
+        # Include row data inline for small result sets so the model sees real values
+        inline = ""
+        if result["total"] <= 10:
+            inline = "\n" + json.dumps(result["rows"], indent=2, default=str)
+
         return (
             f"Retrieved {result['total']} rows from table '{table_name}' "
             f"(columns: {cols}). Data has been sent directly to the user "
             f"as inline messages. Do NOT fabricate or repeat the data. "
             f"If the user wants a downloadable Excel file, call export_to_excel."
+            f"{inline}"
         )
 
     def group_by(
@@ -285,7 +311,7 @@ def create_data_tools(
                 return "No previous data available. Please specify a table to export."
  
             fc, fv = filter_column or None, filter_value or None
-            error = _validate_status_filter(fc, fv)
+            error = _validate_status_filter(fc, fv, table_name, _primary_tables)
             if error:
                 return error
  
@@ -321,7 +347,92 @@ def create_data_tools(
             f"The download link has been automatically sent to the user. "
             f"Do NOT include any links, URLs, or file paths in your response."
         )
- 
+
+    def lookup_part(
+        part_number: Annotated[str, Field(description="The PartNumber to look up across all tables")],
+    ) -> str:
+        """Look up a specific part number across all available tables.
+        Returns all rows from every table that contain this PartNumber.
+        Use this when the user asks about a specific part."""
+        result = loader.lookup_part(part_number)
+        tables_found = result["tables"]
+
+        if not tables_found:
+            return json.dumps(
+                {"error": f"No data found for PartNumber '{part_number}' in any table."},
+                indent=2,
+            )
+
+        # Populate last_result with all found rows so the kernel safety guard works
+        all_rows = []
+        all_columns = set()
+        for tbl_name, rows in tables_found.items():
+            all_rows.extend(rows)
+            cols = result.get("columns_by_table", {}).get(tbl_name, [])
+            all_columns.update(cols)
+        _store_last_result(
+            last_result,
+            "lookup_part",
+            all_rows,
+            list(all_columns) if all_columns else ["PartNumber"],
+        )
+
+        return json.dumps(
+            {
+                "part_number": part_number,
+                "tables_found": len(tables_found),
+                "data": {
+                    tbl_name: rows
+                    for tbl_name, rows in tables_found.items()
+                },
+                "note": (
+                    "If the user asked a specific question, answer ONLY that question. "
+                    "If the user asked broadly (e.g. 'tell me about'), include ALL relevant fields "
+                    "from ALL tables above (Status, Details, Confidence, Replacement_intent, NewPN, etc.). "
+                    "Do NOT fabricate or invent any data."
+                ),
+            },
+            indent=2,
+            default=str,
+        )
+
+    def get_row_by_id(
+        table_name: Annotated[str, Field(description="Table to search")],
+        column: Annotated[str, Field(description="Column to match (e.g. pklogid)")],
+        value: Annotated[str, Field(description="Value to find")],
+    ) -> str:
+        """Look up rows by any column+value pair (e.g. pklogid, LogDate).
+        Use this when the user asks for a row by a non-PartNumber identifier."""
+        result = loader.lookup_row(table_name, column, value)
+        if result["total"] == 0:
+            return json.dumps(
+                {"error": f"No rows found where {column}={value} in {table_name}."},
+                indent=2,
+            )
+
+        # Populate last_result so the kernel safety guard sees the data
+        _store_last_result(
+            last_result,
+            result["table"],
+            result["rows"],
+            result["columns"],
+        )
+
+        return json.dumps(
+            {
+                "table": result["table"],
+                "lookup": f"{result['column']}={value}",
+                "total_rows": result["total"],
+                "data": result["rows"],
+                "note": (
+                    "Answer ONLY the user's specific question using the values above. "
+                    "Do NOT fabricate or invent any data."
+                ),
+            },
+            indent=2,
+            default=str,
+        )
+
     return [
         list_tables,
         get_schema,
@@ -331,4 +442,6 @@ def create_data_tools(
         query_table,
         group_by,
         export_to_excel,
+        lookup_part,
+        get_row_by_id,
     ]
