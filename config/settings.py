@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     sql_table: str = ""       # single table (backward-compat)
     sql_tables: str = ""      # comma-separated list for multi-table
     sql_primary_table: str = ""  # which table is primary (defaults to first)
-    sql_trusted_connection: str = "yes"
+    sql_trusted_connection: str = "no"
     sql_username: str = ""
     sql_password: str = ""
 
