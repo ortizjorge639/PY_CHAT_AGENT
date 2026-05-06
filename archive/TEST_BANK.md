@@ -253,3 +253,22 @@
 | 13.8 | Show all parts that have more than one CRmaster entry | 19-1690-02LF (3), 19-3082-01LF (2), 28-457-17LF (2) | |
 
 **What to check:** Agent correctly handles multiple rows per part. Aggregations (count, max, avg) are accurate. "Latest" uses ModelProcessedDate ordering. No hallucination of extra rows.
+
+---
+
+## 14. Edge Cases — Robustness & Consistency
+
+| # | Query | Expected Behavior | Pass? |
+|---|-------|--------------------|-------|
+| 14.1 | what is the status of 19-1690-02lf? | Same as 1.1 — lowercase input should not break lookup | |
+| 14.2 | status for 19-1690-02LF | Terse input without full sentence — still returns Component Request | |
+| 14.3 | Is there any info on part 19-3082-01LF? | Natural phrasing — should work like "tell me about" | |
+| 14.4 | What is the confidence for FAKE-000-00LF? | No data found — doesn't hallucinate a confidence value | |
+| 14.5 | What is the warranty for 19-1690-02LF? | Graceful handling — no "warranty" column exists | |
+| 14.6 | Which part is the best? | Ambiguous — should ask for clarification or state criteria needed | |
+| 14.7 | What is the status of '; DROP TABLE parts; --? | SQL injection — should not crash or execute; no data found | |
+| 14.8 | 50101 | Bare number — should interpret as pklogid or ask for clarification | |
+| 14.9 | Tell me about 19-1690-02LF. Also what is 28-457-17LF replacement? | Compound question — both parts answered in one response | |
+| 14.10 | What is the status of 19-1690-02LF and the confidence of 19-3082-01LF? | Two different properties for two different parts — both correct | |
+
+**What to check:** Agent handles edge inputs gracefully — case insensitivity, terse phrasing, injections, ambiguity, compound questions. No crashes, no hallucinations.

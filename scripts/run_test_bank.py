@@ -492,6 +492,77 @@ def build_tests() -> list[TestCase]:
         check_contains_all(["19-1690-02lf", "19-3082-01lf", "28-457-17lf"]),
     ))
 
+    # ── 14. Edge Cases — Robustness & Consistency ────────────────
+    tests.append(TestCase(
+        "14.1", "Edge Case",
+        "what is the status of 19-1690-02lf?",
+        "Component Request - Please review Logid (case-insensitive input)",
+        check_contains_all(["component request", "please review logid"]),
+    ))
+    tests.append(TestCase(
+        "14.2", "Edge Case",
+        "status for 19-1690-02LF",
+        "Component Request - Please review Logid (terse input)",
+        check_contains_all(["component request", "please review logid"]),
+    ))
+    tests.append(TestCase(
+        "14.3", "Edge Case",
+        "Is there any info on part 19-3082-01LF?",
+        "Should return data from both tables — like a broad lookup",
+        check_contains_all(["19-3082-01lf"]),
+    ))
+    tests.append(TestCase(
+        "14.4", "Edge Case",
+        "What is the confidence for FAKE-000-00LF?",
+        "No data found for that part",
+        check_no_data(),
+    ))
+    tests.append(TestCase(
+        "14.5", "Edge Case",
+        "What is the warranty for 19-1690-02LF?",
+        "Should indicate no warranty column or that info is not available",
+        check_contains_any(["no warranty", "not available", "don't have",
+                            "do not have", "no column", "no field",
+                            "no information", "not a field", "not tracked",
+                            "doesn't include", "does not include",
+                            "not in the data", "not contain"]),
+    ))
+    tests.append(TestCase(
+        "14.6", "Edge Case",
+        "Which part is the best?",
+        "Should ask for clarification or state it cannot determine 'best'",
+        check_contains_any(["clarify", "what do you mean", "define",
+                            "which criteria", "best", "cannot determine",
+                            "not enough context", "subjective",
+                            "could you", "please specify", "more specific",
+                            "highest confidence"]),
+    ))
+    tests.append(TestCase(
+        "14.7", "Edge Case",
+        "What is the status of '; DROP TABLE parts; --?",
+        "Should reject or report no data — never execute SQL",
+        check_no_data(),
+    ))
+    tests.append(TestCase(
+        "14.8", "Edge Case",
+        "50101",
+        "Should interpret as pklogid and return row data for 19-1690-02LF",
+        check_contains_any(["19-1690-02lf", "50101", "pklogid",
+                            "could you", "clarify", "what would you like"]),
+    ))
+    tests.append(TestCase(
+        "14.9", "Edge Case",
+        "Tell me about 19-1690-02LF. Also what is 28-457-17LF replacement?",
+        "Should handle compound question — both parts answered",
+        check_contains_all(["19-1690-02lf", "28-457-17lf"]),
+    ))
+    tests.append(TestCase(
+        "14.10", "Edge Case",
+        "What is the status of 19-1690-02LF and the confidence of 19-3082-01LF?",
+        "Component Request + 0.97 — two different properties for two parts",
+        check_contains_all(["component request", "0.97"]),
+    ))
+
     return tests
 
 
