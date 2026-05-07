@@ -278,30 +278,39 @@ class AgentKernel:
             # Response generation
             # ------------------------------------------------------------
 
-            if is_part_query and not rows:
+            if is_part_query and not rows and not model_text.strip():
                 response_text = (
                     "I could not find any data for the requested part number."
                 )
 
+            elif is_part_query and not rows and model_text.strip():
+                # Tool returned data via LLM text but not via last_result_buffer
+                response_text = model_text.strip()
+
             elif rows:
                 if len(rows) == 1:
                     row = rows[0]
-                    part = row.get("PartNumber", "Unknown PartNumber")
-                    status = row.get("Status", "Unknown Status")
-
-                    # Safe NaN handling
-                    raw_details = row.get("Details")
-                    details = raw_details.strip() if isinstance(raw_details, str) else ""
-
-                    if details and details.lower() != "nan":
-                        response_text = (
-                            f"Part {part} has a status of \u201c{status}\u201d. "
-                            f"Additional details: {details}"
-                        )
+                    if model_text.strip():
+                        # LLM produced a conversational response — trust it
+                        response_text = model_text.strip()
                     else:
-                        response_text = (
-                            f"Part {part} has a status of \u201c{status}\u201d."
-                        )
+                        # Fallback: kernel formats the response
+                        part = row.get("PartNumber", "Unknown PartNumber")
+                        status = row.get("Status", "Unknown Status")
+
+                        # Safe NaN handling
+                        raw_details = row.get("Details")
+                        details = raw_details.strip() if isinstance(raw_details, str) else ""
+
+                        if details and details.lower() != "nan":
+                            response_text = (
+                                f"Part {part} has a status of \u201c{status}\u201d. "
+                                f"Additional details: {details}"
+                            )
+                        else:
+                            response_text = (
+                                f"Part {part} has a status of \u201c{status}\u201d."
+                            )
                 else:
                     response_text = f"{len(rows)} records match your request."
 
