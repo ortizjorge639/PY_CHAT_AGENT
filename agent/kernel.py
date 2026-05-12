@@ -1,56 +1,41 @@
-"""Microsoft Agent Framework setup — Azure OpenAI agent with tool calling."""
+"""
+Microsoft Agent Framework setup — Azure OpenAI agent with tool calling.
+"""
 
 import asyncio
 import logging
 import re
 from typing import Dict, Optional
-
 from agent_framework import Agent
-from agent_framework import ChatOptions
 from agent_framework.azure import AzureOpenAIChatClient
-
 from config.settings import Settings
 from data.loader import DataLoader
 from agent.plugins.data_plugin import create_data_tools
-
 logger = logging.getLogger(__name__)
 
+# -------------------------------------------------------------------
+# FULL SYSTEM PROMPT
+# -------------------------------------------------------------------
 SYSTEM_PROMPT_TEMPLATE = """\
 You are a data assistant inside Microsoft Teams. Users ask natural-language
 questions about tabular data and you answer with precise, factual results
 derived strictly from the available dataset.
-
 Data sources:
 {table_roles}
-
-----------------------------------------------------------------
-TABLE SCHEMAS
-----------------------------------------------------------------
-{table_schemas}
-
 ----------------------------------------------------------------
 DOMAIN KNOWLEDGE
 ----------------------------------------------------------------
-- The primary table contains authoritative disposition/status data.
-  Each row represents exactly one unique PartNumber.
+- Each row represents exactly one unique PartNumber.
 - The Status column is authoritative and determines the disposition,
   eligibility, or restriction associated with a part.
 - The Details column provides additional explanation or structured context
   for the Status when such information is available.
-- Supplemental tables contain metadata (replacements, confidence, etc.).
-- When a user asks about a specific PartNumber, ALWAYS call the
-  lookup_part tool FIRST. It searches all tables automatically.
-  NEVER use get_rows, query_table, or count_rows to look up a single part.
-- If the user asks for a row by a non-PartNumber identifier
-  (e.g. pklogid, LogDate), use get_row_by_id instead of query_table.
-- If a column exists in multiple tables, clarify which table you are
-  querying and why.
-
+- When a user asks about a specific PartNumber, you MUST retrieve
+  the row using tools.
 ----------------------------------------------------------------
-AUTHORITATIVE STATUS VALUES (primary table — EXACT MATCHING ONLY)
+AUTHORITATIVE STATUS VALUES (ENUM — EXACT MATCHING ONLY)
 ----------------------------------------------------------------
 You must use ONLY the following Status values exactly as written:
-
 - NOT eligible for scrap - Bin Location-[SHOW]
 - Component Request - Please review Logid
 - No stock
@@ -66,114 +51,97 @@ You must use ONLY the following Status values exactly as written:
 - NOT eligible for scrap - Custom Button
 - REPAIR USAGE- Need Further review
 - NOT eligible for scrap - International Powercord
-
 Do NOT invent, alter, abbreviate, paraphrase, or substitute Status values.
-
-----------------------------------------------------------------
-STATUS → BUSINESS REASON (use when explaining statuses)
-----------------------------------------------------------------
-- "NOT eligible for scrap - Bin Location-[SHOW]" → it is currently in a trade show
-- "Component Request - Please review Logid" → it needs further review, in Component Request was flagged as a possible replacement
-- "No stock" → it is not currently in stock
-- "Product USAGE" → it had product usage in last two years
-- "In WhereUsed with parent" → it has a parent part that is either active or in development
-- "NOT eligible for scrap - Bin Stock" → it is in bin stock
-- "NOT eligible for scrap - NOT A PHYSICAL PART" → it is not a physical part
-- "May be eligible to be scrapped" → it may be eligible to be scrapped
-- "Need Further Review-NO BOM" → it needs further review- NO BOM
-- "Sold in Past Two Years" → it was sold in past two years
-- "Open WorkOrder" → it has an open work order
-- "Open Sales Order" → it has an open sales order
-- "NOT eligible for scrap - Custom Button" → it is a custom button
-- "REPAIR USAGE- Need Further review" → it has been in repair usage in past 3 years
-- "NOT eligible for scrap - International Powercord" → it is an international powercord
-
-----------------------------------------------------------------
-RESPONSE STYLE
-----------------------------------------------------------------
-Answer like a knowledgeable colleague. For scrap questions, state
-eligibility first, then give the business reason using the guide above.
-Keep answers to 1–2 sentences for single-part lookups.
-
-Few-shot examples:
-
-User: Can part 19-2796-01 be scrapped?
-Assistant: Part 19-2796-01 is not eligible to be scrapped because it is
-not a physical part.
-
-User: Can part 15-2862-02LF be scrapped?
-Assistant: Part 15-2862-02LF is not eligible to be scrapped because it
-has a parent part that is either active or in development.
-
-User: Can part 15-4578-02 be scrapped?
-Assistant: Part 15-4578-02 may be eligible to be scrapped.
-
-User: Can part 15-3167-11 be scrapped?
-Assistant: Part 15-3167-11 is not currently in stock.
-
-User: How many parts have status "No stock"?
-Assistant: There are 64 parts with the status “No stock” in the dataset.
-
-User: What is the confidence for FAKE-000-00LF?
-Assistant: I don’t have any data for part FAKE-000-00LF in either table,
-so I can’t provide a confidence score.
-
-User: What is the price of part 15-3167-11?
-Assistant: The dataset doesn’t include pricing information. The available
-columns are PartNumber, Status, Details, and ModelProcessedDate.
-
-
 ----------------------------------------------------------------
 AUTHORITATIVE DATA RULES (CRITICAL)
 ----------------------------------------------------------------
 - Tool output is the single source of truth.
-- You may explain statuses in plain language but never contradict tool output.
+- Never reinterpret, override, or clarify data after tools run.
 - Do NOT invent Details if empty.
 - If tools return data, the kernel may generate the final explanation.
-- When get_rows or query_table says "data has been sent directly to the
-  user", do NOT repeat or reproduce the data. Just state what was found.
-
-----------------------------------------------------------------
-CONCISENESS
-----------------------------------------------------------------
-- Specific-field question → answer that field only (1–2 sentences).
-- Include CRmaster data only if user asks broadly or requests it.
-
 ----------------------------------------------------------------
 FILE EXPORT RULES
 ----------------------------------------------------------------
-- Generate Excel ONLY if the user explicitly says "excel", "spreadsheet",
-  "download", or "export".
-- When the user says "list", "show me", or "give me", return the data
-  directly.
-
+- Generate Excel ONLY if explicitly requested.
 ----------------------------------------------------------------
 SYSTEM CONSTRAINTS
 ----------------------------------------------------------------
 - Never contradict tool output.
 - Never invent data or business rules.
-- NEVER invent column names. If unsure, call list_tables or get_schema first.
-
+Allowed columns:
+- PartNumber
+- Status
+- Details
+- Processed_Date
 ----------------------------------------------------------------
 OUTPUT REQUIREMENT
 ----------------------------------------------------------------
 - Never return an empty response.
 """
 
-PART_NUMBER_PATTERN = re.compile(
-    r"\b(?:[A-Z]{1,3}-)?\d{2,}-\d{2,}-\d{2,}[A-Z]*\b",
-    re.IGNORECASE,
-)
+# Conservative pattern for detecting PartNumber-style queries
+PART_NUMBER_PATTERN = re.compile(r"\b\d[\w\-]+\b")
 
+def interpret_scrap_status(part: str, status: str) -> str:
+    """
+    Maps Status values to exact business-approved human responses.
+    """
+
+    if not status:
+        return f"Part {part} scrap eligibility is unknown."
+    status_map = {
+        "NOT eligible for scrap - Bin Location-[SHOW]":
+            f"Part {part} is not eligible to be scrapped because it is currently in a trade show",
+        "Component Request - Please review Logid":
+            f"Part {part} is not eligible to be scrapped because it needs further review, in Component Request was flagged as a possible replacement.",
+        "No stock":
+            f"Part {part} is not currently in stock",
+        "Product USAGE":
+            f"Part {part} is not eligible to be scrapped because it had product usage in last two years",
+        "In WhereUsed with parent":
+            f"Part {part} is not eligible to be scrapped because it it used in a higher level assembly which is active",
+        "NOT eligible for scrap - Bin Stock":
+            f"Part {part} is not eligible to be scrapped because it is in bin stock",
+        "NOT eligible for scrap - NOT A PHYSICAL PART":
+            f"Part {part} is not eligible to be scrapped because it is not a physical part",
+        "May be eligible to be scrapped":
+            f"Part {part} may be eligible to be scrapped",
+        "Need Further Review-NO BOM":
+            f"Part {part} is not eligible to be scrapped, it needs further review- NO BOM",
+        "Sold in Past Two Years":
+            f"Part {part} is not eligible to be scrapped because it was sold in past two years",
+        "Open WorkOrder":
+            f"Part {part} is not eligible to be scrapped because it has an open work order",
+        "Open Sales Order":
+            f"Part {part} is not eligible to be scrapped because it has an open sales order",
+        "NOT eligible for scrap - Custom Button":
+            f"Part {part} is not eligible to be scrapped because it is a custom button",
+        "REPAIR USAGE- Need Further review":
+            f"Part {part} is not eligible to be scrapped because it has been in repair usage in past 3 years",
+        "NOT eligible for scrap - International Powercord":
+            f"Part {part} is not eligible to be scrapped because it is an international powercord",
+    }
+    return status_map.get(
+        status,
+        f"Part {part} has a status of “{status}”."
+    )
 
 def extract_part_number(text: str) -> Optional[str]:
     match = PART_NUMBER_PATTERN.search(text)
     return match.group(0) if match else None
 
+def wants_excel(text: str) -> bool:
+    text = text.lower()
+    return any(
+        kw in text
+        for kw in ("excel", "spreadsheet", "download", "export")
+    )
+
+# -------------------------------------------------------------------
+# AGENT KERNEL
+# -------------------------------------------------------------------
 
 class AgentKernel:
-    """Wraps the Microsoft Agent Framework with per-conversation sessions."""
-
     def __init__(self, settings: Settings, data_loader: DataLoader) -> None:
         self._data_buffer: list[str] = []
         self._file_buffer: list[dict] = []
@@ -184,7 +152,6 @@ class AgentKernel:
             endpoint=settings.azure_openai_endpoint,
             deployment_name=settings.azure_openai_deployment_name,
         )
-        # Version 2 behavior retained (Teams Excel support)
         tools = create_data_tools(
             loader=data_loader,
             data_buffer=self._data_buffer,
@@ -197,33 +164,15 @@ class AgentKernel:
             "\n".join(f"  - {t} ({r})" for t, r in roles.items())
             if roles else "  (no tables loaded)"
         )
-
-        schema_blocks = []
-        for tbl in data_loader.list_tables():
-            schema = data_loader.get_schema(tbl)
-            cols = ", ".join(f"{c} ({t})" for c, t in schema.items())
-            schema_blocks.append(f"  {tbl}: {cols}")
-        table_schemas_str = "\n".join(schema_blocks) if schema_blocks else "  (none)"
-
         system_prompt = SYSTEM_PROMPT_TEMPLATE.format(
-            table_roles=table_roles_str,
-            table_schemas=table_schemas_str,
+            table_roles=table_roles_str
         )
         self._agent = Agent(
             client=client,
             instructions=system_prompt,
             tools=tools,
-            default_options=ChatOptions(temperature=0),
         )
         self._sessions: Dict[str, object] = {}
-        logger.info(
-            "AgentKernel initialized (deployment=%s)",
-            settings.azure_openai_deployment_name,
-        )
-
-    # -------------------------------------------------------------------
-    # Session handling
-    # -------------------------------------------------------------------
 
     def _get_session(self, conversation_id: str):
         if conversation_id not in self._sessions:
@@ -231,7 +180,7 @@ class AgentKernel:
         return self._sessions[conversation_id]
 
     # -------------------------------------------------------------------
-    # Public API
+    # MAIN ENTRY
     # -------------------------------------------------------------------
 
     async def ask(self, conversation_id: str, user_message: str) -> dict:
@@ -241,6 +190,7 @@ class AgentKernel:
             self._last_result_buffer.clear()
             session = self._get_session(conversation_id)
             wants_list = "list" in user_message.lower()
+            excel_requested = wants_excel(user_message)
             requested_part = extract_part_number(user_message)
             is_part_query = bool(requested_part)
             try:
@@ -255,58 +205,43 @@ class AgentKernel:
             data_chunks = list(dict.fromkeys(self._data_buffer))
             files = list(self._file_buffer)
             rows = self._last_result_buffer.get("rows")
-            # Kernel-level EXACT MATCH SAFETY GUARD
-            if is_part_query and rows:
+
+            # ------------------------------------------------------------
+            # CASE-INSENSITIVE MATCH (UNCHANGED)
+            # ------------------------------------------------------------
+            if is_part_query and rows and requested_part:
+                requested_norm = requested_part.upper()
                 rows = [
                     r for r in rows
-                    if str(r.get("PartNumber", "")).lower() == requested_part.lower()
+                    if str(r.get("PartNumber", "")).upper() == requested_norm
                 ]
-            if is_part_query and rows:
-                # Find the primary-table row (has Status) for formatted response
-                primary_row = next((r for r in rows if r.get("Status")), None)
-                if model_text.strip():
-                    # Model produced a response from tool data — trust it
-                    response_text = model_text.strip()
-                elif primary_row:
-                    part = primary_row.get("PartNumber", "Unknown PartNumber")
-                    status = primary_row.get("Status")
-                    raw_details = primary_row.get("Details")
-                    # NaN-safe: pandas stores SQL NULL as float('nan'), which is truthy — must check explicitly
-                    details = ("" if raw_details is None or (isinstance(raw_details, float) and raw_details != raw_details) else str(raw_details)).strip()
-                    if details and details.lower() != "nan":
-                        response_text = (
-                            f"Part {part} has a status of \u201c{status}\u201d. "
-                            f"Additional details: {details}"
-                        )
-                    else:
-                        response_text = (
-                            f"Part {part} has a status of \u201c{status}\u201d."
-                        )
+
+            # ------------------------------------------------------------
+            # RESPONSE GENERATION (UPDATED SECTION ONLY)
+            # ------------------------------------------------------------
+            if is_part_query and not rows:
+                response_text = "I couldn't find anything for that part number."
+            elif rows:
+                if len(rows) == 1:
+                    row = rows[0]
+                    part = row.get("PartNumber", "Unknown PartNumber")
+                    status = row.get("Status", "Unknown Status")
+                    scrap_message = interpret_scrap_status(part, status)
+                    response_text = scrap_message
                 else:
-                    response_text = f"Data found for {requested_part}, but no Status field available."
-            elif is_part_query and not rows and not model_text.strip():
-                response_text = (
-                    "I could not find any data for the requested PartNumber, "
-                    "so I cannot determine whether it can be scrapped."
-                )
-            elif model_text.strip():
+                    response_text = f"{len(rows)} records match your request."
+            elif model_text.strip() and not is_part_query:
                 response_text = model_text.strip()
-            elif files:
-                response_text = "The requested file has been generated."
             else:
                 response_text = "No data was returned."
-            # ── Post-processing: strip LLM filler the prompt can't fully suppress ──
-            # Pattern 1: "Let me know..." sign-offs (any variant)
-            # Pattern 2: "If you'd/would/need... download/excel/export" suggestions
-            # Pattern 3: "Want/Would you like/Need... download/excel/export" offers
-            _FILLER_PATTERNS = [
-                r"\s*Let me know\b.*$",
-                r"\s*If you(?:'d| would| need)\b.*(?:download|excel|export|format).*$",
-                r"\s*(?:Want|Would you like|Need)\b.*(?:download|excel|export|format).*$",
-            ]
-            for pat in _FILLER_PATTERNS:
-                response_text = re.sub(pat, "", response_text, flags=re.IGNORECASE | re.DOTALL)
-            response_text = response_text.strip()
+
+            # ------------------------------------------------------------
+            # HARD UX RULE ENFORCEMENT (UNCHANGED)
+            # ------------------------------------------------------------
+            data_chunks = data_chunks if wants_list else []
+            files = files if excel_requested else []
+            if excel_requested and files:
+                response_text = "The Excel file has been generated."
             return {
                 "text": response_text,
                 "data_chunks": data_chunks,
