@@ -102,7 +102,6 @@ Run the pipeline manually from Azure DevOps:
 4. Click **Run**
 
 The pipeline reads `requirements.txt` and installs the new packages automatically. No pipeline YAML changes are needed.
-
 ---
 
 ## 5. Verify It Works
