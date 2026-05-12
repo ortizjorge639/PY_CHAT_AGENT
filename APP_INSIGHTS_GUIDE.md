@@ -1,37 +1,40 @@
-# Application Insights — Setup & Operations Guide
+# Application Insights - Setup & Operations Guide
 
-Observability for the Obsolescence Chat Bot using Azure Monitor OpenTelemetry.
-
-Once enabled, requests, dependencies (Azure OpenAI, SQL), exceptions, and Python logs are all tracked automatically.
+Observability for the Obsolescence Chat Bot using Azure Monitor OpenTelemetry. Once enabled, requests, dependencies (Azure OpenAI, SQL), exceptions, and Python logs are all tracked automatically.
 
 ---
 
 ## 1. Prerequisites
 
+| Resource | Where to create or find it |
+|---|---|
+| Application Insights | Azure Portal -> Create a resource -> Application Insights |
+| Connection String | App Insights -> Overview -> top-right panel -> copy Connection String |
+
 ### Create an Application Insights resource
 
 1. Open [portal.azure.com](https://portal.azure.com)
-2. Click **+ Create a resource** (top-left)
-3. Search for **Application Insights** → click **Create**
-4. Fill in: Subscription, Resource Group, Name, Region
+2. Click **+ Create a resource**
+3. Search for **Application Insights** and click **Create**
+4. Fill in Subscription, Resource Group, Name, and Region
 5. Under **Resource Mode**, select **Workspace-based**
-6. Click **Review + Create** → **Create**
+6. Click **Review + Create** and then **Create**
 
 ### Get the Connection String
 
-1. Open your new **Application Insights** resource
-2. On the **Overview** page, look at the top-right panel
-3. Find **Connection String** → click the **copy** icon
-4. Save this — you'll paste it into App Service settings next
+1. Open the new **Application Insights** resource
+2. On the **Overview** page, find **Connection String** in the top-right panel
+3. Click the copy icon
+4. Save it for the App Service configuration step
 
 ---
 
 ## 2. What Was Added to the Code
 
-Three files changed, two packages added:
+Three files changed and two packages were added.
 
 ### `requirements.txt`
-```
+```text
 azure-monitor-opentelemetry>=1.6.0
 opentelemetry-instrumentation-aiohttp-server>=0.48b0
 ```
@@ -40,12 +43,14 @@ opentelemetry-instrumentation-aiohttp-server>=0.48b0
 ```python
 applicationinsights_connection_string: str = ""
 ```
-Reads from env var `APPLICATIONINSIGHTS_CONNECTION_STRING`.
+
+This reads from the `APPLICATIONINSIGHTS_CONNECTION_STRING` environment variable.
 
 ### `main_test.py` (entry point)
 ```python
 if settings.applicationinsights_connection_string:
     from azure.monitor.opentelemetry import configure_azure_monitor
+
     configure_azure_monitor(
         connection_string=settings.applicationinsights_connection_string,
     )
@@ -54,7 +59,7 @@ if settings.applicationinsights_connection_string:
     logger.info("Azure Monitor OpenTelemetry enabled")
 ```
 
-If the env var is empty, telemetry is completely skipped — zero overhead.
+If the environment variable is empty, telemetry is skipped entirely.
 
 ---
 
@@ -62,36 +67,41 @@ If the env var is empty, telemetry is completely skipped — zero overhead.
 
 ### Add the Connection String to App Service
 
-1. Open [portal.azure.com](https://portal.azure.com)
-2. Go to your **App Service** resource
-3. Left sidebar → **Settings** → **Configuration**
-4. Click the **Application settings** tab
-5. Click **+ New application setting**
-6. Name: `APPLICATIONINSIGHTS_CONNECTION_STRING`
-7. Value: paste the connection string you copied in step 1
-8. Click **OK** → click **Save** (top bar) → click **Continue** to confirm
+1. Open your **App Service** resource in the Azure Portal
+2. Go to **Settings** -> **Configuration**
+3. Open the **Application settings** tab
+4. Click **+ New application setting**
+5. Name: `APPLICATIONINSIGHTS_CONNECTION_STRING`
+6. Value: paste the connection string copied from App Insights
+7. Click **OK** and then **Save**
 
 ### Restart the App Service
 
-1. Go to your **App Service** resource
-2. Left sidebar → **Overview**
-3. Click **Restart** (top bar) → click **Yes** to confirm
+1. Go to **App Service** -> **Overview**
+2. Click **Restart** and confirm
 
 ### Change Data Retention (optional)
 
-1. Open your **Application Insights** resource
-2. Left sidebar → **Configure** → **Usage and estimated costs**
+1. Open the **Application Insights** resource
+2. Go to **Configure** -> **Usage and estimated costs**
 3. Click **Data Retention**
-4. Use the slider to pick: 30, 60, 90, 120, 180, 270, 365, or 730 days
+4. Choose 30, 60, 90, 120, 180, 270, 365, or 730 days
 5. Click **OK**
 
-Default is 90 days. Beyond 90 days costs extra per GB.
+Default retention is 90 days.
 
 ---
 
 ## 4. Deploy
 
-Deploy via your existing CI/CD pipeline. The pipeline reads `requirements.txt` and installs the new packages automatically. No pipeline YAML changes needed.
+Run the pipeline manually from Azure DevOps:
+
+1. Go to **Pipelines**
+2. Select the pipeline and click **Run pipeline**
+3. Choose the branch/tag dropdown and select your branch
+4. Click **Run**
+
+The pipeline reads `requirements.txt` and installs the new packages automatically. No pipeline YAML changes are needed.
 
 ---
 
@@ -99,43 +109,39 @@ Deploy via your existing CI/CD pipeline. The pipeline reads `requirements.txt` a
 
 ### Check the Log Stream
 
-1. Open your **App Service** resource
-2. Left sidebar → **Monitoring** → **Log stream**
-3. Wait for the app to start (may take 1-2 minutes after a deploy)
-4. Look for this line:
-```
+1. Open **App Service** -> **Monitoring** -> **Log stream**
+2. Wait for startup after deploy
+3. Look for:
+
+```text
 [INFO] __main__: Azure Monitor OpenTelemetry enabled
 ```
-If you see it, telemetry is active. If not, check that the connection string env var is set correctly.
+
+If you see it, telemetry is active.
 
 ### Check Live Metrics
 
-1. Open your **Application Insights** resource
-2. Left sidebar → **Investigate** → **Live metrics**
-3. The page should show "Connected" with real-time charts
-4. Send a message to the bot (via Teams or the web UI)
-5. You should see a spike in the **Incoming Requests** chart
+1. Open **Application Insights** -> **Investigate** -> **Live metrics**
+2. Send a message to the bot
+3. You should see request spikes in real time
 
 ---
 
-## 6. Daily Operations — Where to Look
+## 6. Daily Operations
 
 ### First stop: Failures
 
-1. Open your **Application Insights** resource
-2. Left sidebar → **Investigate** → **Failures**
-3. Check the chart — if the failure count is 0, you're good
-4. If there are failures: click any red bar to see the list of failed requests
-5. Click any failed request → see the full stack trace and timeline
+1. Open **Application Insights** -> **Investigate** -> **Failures**
+2. If the failure count is 0, move on
+3. If there are failures, click a red bar and inspect the failed request
 
-This is your "is anything broken right now?" check.
+This is the fastest way to answer: is anything broken right now?
 
-### Second stop: Traces (your persistent Log Stream)
+### Second stop: Traces
 
-1. Open your **Application Insights** resource
-2. Left sidebar → **Monitoring** → **Logs**
-3. If a "Queries" popup appears, close it (click **X**)
-4. In the query editor, paste this and click **Run**:
+1. Open **Application Insights** -> **Monitoring** -> **Logs**
+2. Close any **Queries** popup if it appears
+3. Run this query:
 
 ```kql
 traces
@@ -144,9 +150,10 @@ traces
 | take 200
 ```
 
-This is the same data as Log Stream, but searchable and stored for up to 90 days. Change `24h` to `7d` for the past week.
+This is the searchable history of Log Stream. Change `24h` to `7d` for the past week.
 
-#### Filter out Azure SDK noise (show only your app logs):
+#### Filter out Azure SDK noise
+
 ```kql
 traces
 | where timestamp > ago(24h)
@@ -157,11 +164,7 @@ traces
 
 ### Save your query for quick access
 
-1. After running a query, click **Save** (top bar of the query editor)
-2. Select **Save as query**
-3. Name it something like "App Logs (24h)"
-4. Click **Save**
-5. Next time: click **Queries** (top bar) → find your saved query → click **Run**
+After running a query, click **Save** -> **Save as query** and name it something like **App Logs (24h)**.
 
 ---
 
@@ -219,7 +222,36 @@ requests
 
 ---
 
-## 8. Learn More
+## 8. What Gets Tracked Automatically
+
+| Category | What you see | Where |
+|---|---|---|
+| Requests | Every `/api/messages` and `/api/chat` call with status and latency | Transaction Search, Performance |
+| Dependencies | Outbound calls to Azure OpenAI and SQL Server | Transaction Search, Application Map |
+| Exceptions | Unhandled errors with full stack traces | Failures blade |
+| Traces | All Python `logger.info/warning/error` calls | Logs -> traces table |
+| Live Metrics | Real-time request rate, failures, CPU, memory | Live Metrics blade |
+
+---
+
+## 9. Optional Enhancements
+
+### Learn More
+
+Use the Azure Portal docs for Application Insights and Azure Monitor OpenTelemetry to extend this setup if you want sampling, dashboards, or alerting.
+
+| Feature | How to enable | What it gives you |
+|---|---|---|
+| **GenAI tracing** | Add env var `AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING=true` in App Service config | Prompt text, completions, token counts |
+| **Alerts** | App Insights → Alerts → New alert rule → Failed requests > 0 in 5 min | Email/Teams notification when something breaks |
+| **Availability tests** | App Insights → Availability → Add test → ping your bot URL every 5 min | Get alerted if the bot goes down |
+| **Dashboards** | Any KQL query → Pin to dashboard | Custom monitoring view in Azure Portal |
+| **Custom spans** | Add OpenTelemetry spans in `kernel.py` around tool calls | Per-tool-call timing (how long `lookup_part` vs `get_rows` took) |
+
+---
+
+## 10. Learn More
+>>>>>>> d519343 (docs: add Application Insights setup and operations guide)
 
 - [Azure Monitor OpenTelemetry for Python](https://learn.microsoft.com/en-us/azure/azure-monitor/app/opentelemetry-enable?tabs=python)
 - [KQL quick reference](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/kql-quick-reference)
