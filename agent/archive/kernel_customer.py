@@ -12,7 +12,7 @@ from agent_framework.azure import AzureOpenAIChatClient
 
 from config.settings import Settings
 from data.loader import DataLoader
-from agent.plugins.data_plugin import create_data_tools
+from agent.plugins.data_plugin_customer import create_data_tools
 
 logger = logging.getLogger(__name__)
 
