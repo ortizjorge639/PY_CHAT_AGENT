@@ -75,8 +75,6 @@ Options: 30, 60, 90, 120, 180, 270, 365, 730 days. Beyond 90 days costs extra pe
 
 Deploy via your existing CI/CD pipeline. The pipeline reads `requirements.txt` and installs the new packages automatically. No pipeline YAML changes needed.
 
-> **Note:** The customer's pipeline deploys from their configured branch (e.g. `main`). Branch selection during manual runs is an internal development workflow only.
-
 ---
 
 ## 5. Verify It Works
