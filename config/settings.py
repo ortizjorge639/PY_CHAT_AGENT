@@ -49,5 +49,8 @@ class Settings(BaseSettings):
     require_auth: bool = False
     file_download_group_id: str = ""
 
+    # Telemetry
+    applicationinsights_connection_string: str = ""
+
     # General
     log_level: str = "INFO"
