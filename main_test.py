@@ -44,6 +44,9 @@ if settings.applicationinsights_connection_string:
     configure_azure_monitor(
         connection_string=settings.applicationinsights_connection_string,
     )
+    # Silence noisy Azure SDK HTTP logs (QuickPulse pings every few seconds)
+    logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
+    logging.getLogger("azure.monitor.opentelemetry.exporter").setLevel(logging.WARNING)
     logger.info("Azure Monitor OpenTelemetry enabled")
 
 
