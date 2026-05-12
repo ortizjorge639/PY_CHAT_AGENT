@@ -2,6 +2,8 @@
 
 Observability for the Obsolescence Chat Bot using Azure Monitor OpenTelemetry.
 
+Once enabled, requests, dependencies (Azure OpenAI, SQL), exceptions, and Python logs are all tracked automatically.
+
 ---
 
 ## 1. Prerequisites
@@ -189,31 +191,7 @@ requests
 
 ---
 
-## 8. What Gets Tracked Automatically
-
-| Category | What you see | Where |
-|---|---|---|
-| **Requests** | Every `/api/messages` and `/api/chat` call with status and latency | Transaction Search, Performance |
-| **Dependencies** | Outbound calls to Azure OpenAI and SQL Server | Transaction Search, Application Map |
-| **Exceptions** | Unhandled errors with full stack traces | Failures blade |
-| **Traces** | All Python `logger.info/warning/error` calls | Logs → traces table |
-| **Live Metrics** | Real-time request rate, failures, CPU, memory | Live Metrics blade |
-
----
-
-## 9. Optional Enhancements
-
-| Feature | How to enable | What it gives you |
-|---|---|---|
-| **GenAI tracing** | Add env var `AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING=true` in App Service config | Prompt text, completions, token counts |
-| **Alerts** | App Insights → Alerts → New alert rule → Failed requests > 0 in 5 min | Email/Teams notification when something breaks |
-| **Availability tests** | App Insights → Availability → Add test → ping your bot URL every 5 min | Get alerted if the bot goes down |
-| **Dashboards** | Any KQL query → Pin to dashboard | Custom monitoring view in Azure Portal |
-| **Custom spans** | Add OpenTelemetry spans in `kernel.py` around tool calls | Per-tool-call timing (how long `lookup_part` vs `get_rows` took) |
-
----
-
-## 10. Learn More
+## 8. Learn More
 
 - [Azure Monitor OpenTelemetry for Python](https://learn.microsoft.com/en-us/azure/azure-monitor/app/opentelemetry-enable?tabs=python)
 - [KQL quick reference](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/kql-quick-reference)
