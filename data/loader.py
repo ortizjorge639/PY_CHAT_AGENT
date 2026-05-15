@@ -1,6 +1,7 @@
 """Data access layer — loads from Excel or SQL Server based on DATASOURCE flag."""
 
 import logging
+import time
 from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
@@ -50,11 +51,36 @@ def _fuzzy_resolve(needle: str, haystack: list[str], label: str = "value") -> st
 class DataLoader:
     """Loads tabular data from Excel files or SQL Server and exposes query helpers."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, auto_load: bool = True) -> None:
         self._settings = settings
         self._tables: dict[str, pd.DataFrame] = {}
         self._table_roles: dict[str, str] = {}  # table_name → "primary" | "supplemental"
-        self._load()
+        self._is_loaded = False
+        self._load_error: Exception | None = None
+        if auto_load:
+            self.load_now()
+
+    @property
+    def is_loaded(self) -> bool:
+        """Whether tables have been loaded successfully."""
+        return self._is_loaded
+
+    @property
+    def load_error(self) -> Exception | None:
+        """Most recent loading error, if any."""
+        return self._load_error
+
+    def load_now(self) -> None:
+        """Load configured data source now. Safe to call multiple times."""
+        if self._is_loaded:
+            return
+        try:
+            self._load()
+            self._is_loaded = True
+            self._load_error = None
+        except Exception as exc:
+            self._load_error = exc
+            raise
 
     # ── loaders ──────────────────────────────────────────
 
@@ -145,7 +171,21 @@ class DataLoader:
         )
         logger.info("Connection string: %s", conn_str.replace(s.sql_password, "****"))
 
-        conn = pyodbc.connect(conn_str)
+        max_retries = 3
+        retry_delay = 5  # seconds
+        for attempt in range(1, max_retries + 1):
+            try:
+                conn = pyodbc.connect(conn_str)
+                break
+            except pyodbc.OperationalError:
+                if attempt == max_retries:
+                    logger.error("SQL connection failed after %d attempts", max_retries)
+                    raise
+                logger.warning(
+                    "SQL connect attempt %d/%d failed, retrying in %ds...",
+                    attempt, max_retries, retry_delay,
+                )
+                time.sleep(retry_delay)
 
         tables = s.sql_table_list
         if not tables:
