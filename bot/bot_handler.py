@@ -33,9 +33,13 @@ class ChatBot(ActivityHandler):
             return
         if activity_id:
             self._processed_ids[conversation_id] = activity_id
+        user_id = turn_context.activity.from_property.id
+        user_name = turn_context.activity.from_property.name
         logger.info(
-            "Message from conversation %s: %s",
+            "User [%s] [%s] (%s): %s",
             conversation_id,
+            user_id,
+            user_name,
             user_text[:120],
         )
 
@@ -55,6 +59,7 @@ class ChatBot(ActivityHandler):
             )
 
         # Send LLM commentary
+        logger.info("Bot [%s]: %s", conversation_id, response["text"][:200])
         await turn_context.send_activity(response["text"])
 
     async def on_members_added_activity(self, members_added, turn_context: TurnContext) -> None:

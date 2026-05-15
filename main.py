@@ -38,6 +38,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ── Azure Monitor / OpenTelemetry ───────────────────────
+if settings.applicationinsights_connection_string:
+    from azure.monitor.opentelemetry import configure_azure_monitor
+    configure_azure_monitor(
+        connection_string=settings.applicationinsights_connection_string,
+    )
+    # Silence noisy Azure SDK HTTP logs (QuickPulse pings every few seconds)
+    logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
+    logging.getLogger("azure.monitor.opentelemetry.exporter").setLevel(logging.WARNING)
+    logger.info("Azure Monitor OpenTelemetry enabled")
+
 
 # ── Easy Auth helpers ───────────────────────────────────
 EASY_AUTH_HEADER = "X-MS-CLIENT-PRINCIPAL-ID"
@@ -153,8 +164,9 @@ async def chat_api(req: web.Request) -> web.Response:
         if not user_msg:
             return web.json_response({"reply": "Please send a message."})
 
-        logger.info("Web chat [%s]: %s", conv_id, user_msg[:120])
+        logger.info("User [%s]: %s", conv_id, user_msg[:120])
         reply = await agent_kernel.ask(conv_id, user_msg)
+        logger.info("Bot [%s]: %s", conv_id, reply["text"][:200])
 
         # Only include file download links if the user is in the download group
         can_download = _user_can_download(req)
