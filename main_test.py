@@ -1,4 +1,6 @@
 import base64
+import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -129,9 +131,70 @@ async def _on_error(context: TurnContext, error: Exception) -> None:
 adapter.on_turn_error = _on_error
 
 # ── Data → Agent → Bot wiring ─────────────────────────
-data_loader = DataLoader(settings)
-agent_kernel = AgentKernel(settings, data_loader)
-bot = ChatBot(agent_kernel)
+data_loader = DataLoader(settings, auto_load=False)
+agent_kernel: AgentKernel | None = None
+bot: ChatBot | None = None
+_startup_state: dict[str, str | bool] = {
+    "ready": False,
+    "failed": False,
+    "last_error": "",
+}
+
+
+def _is_ready() -> bool:
+    return bool(_startup_state["ready"]) and bot is not None
+
+
+def _warmup_message() -> str:
+    if _startup_state["failed"]:
+        return (
+            "I'm still connecting to data sources after startup and can't answer yet. "
+            "Please try again in about 30 seconds."
+        )
+    return "I'm warming up and loading data. Please try again in about 30 seconds."
+
+
+async def _initialize_components_loop(app: web.Application) -> None:
+    """Load data and construct agent in the background with retry on transient startup failures."""
+    global agent_kernel, bot
+    retry_delay_seconds = 15
+    while not _is_ready():
+        try:
+            logger.info("Startup initialization: loading data...")
+            data_loader.load_now()
+            agent_kernel = AgentKernel(settings, data_loader)
+            bot = ChatBot(agent_kernel)
+            _startup_state["ready"] = True
+            _startup_state["failed"] = False
+            _startup_state["last_error"] = ""
+            logger.info("Startup initialization complete; bot is ready to serve requests")
+            return
+        except Exception as exc:
+            _startup_state["failed"] = True
+            _startup_state["last_error"] = str(exc)
+            logger.error("Startup initialization failed: %s", exc, exc_info=True)
+            logger.warning(
+                "Retrying startup initialization in %ds", retry_delay_seconds
+            )
+            await asyncio.sleep(retry_delay_seconds)
+
+
+async def _on_startup(app: web.Application) -> None:
+    app["init_task"] = asyncio.create_task(_initialize_components_loop(app))
+
+
+async def _on_cleanup(app: web.Application) -> None:
+    task = app.get("init_task")
+    if task:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+async def _send_warmup_response(turn_context: TurnContext) -> None:
+    """Reply gracefully while startup is in progress so user messages are not silently lost."""
+    if (turn_context.activity.type or "").lower() == "message":
+        await turn_context.send_activity(_warmup_message())
 
 
 # ── HTTP endpoint ──────────────────────────────────────
@@ -142,6 +205,19 @@ async def messages(req: web.Request) -> web.Response:
         logger.info("Received activity type: %s", body.get("type", "unknown"))
         activity = Activity().deserialize(body)
         auth_header = req.headers.get("Authorization", "")
+
+        if not _is_ready():
+            logger.warning(
+                "Bot Framework message received before startup completed; returning warm-up response"
+            )
+            response = await adapter.process_activity(
+                activity,
+                auth_header,
+                _send_warmup_response,
+            )
+            if response:
+                return web.json_response(data=response.body, status=response.status)
+            return web.Response(status=201)
 
         response = await adapter.process_activity(activity, auth_header, bot.on_turn)
 
@@ -163,6 +239,10 @@ async def chat_api(req: web.Request) -> web.Response:
 
         if not user_msg:
             return web.json_response({"reply": "Please send a message."})
+
+        if not _is_ready():
+            logger.warning("Web chat request received before startup completed")
+            return web.json_response({"reply": _warmup_message()})
 
         logger.info("Web chat [%s]: %s", conv_id, user_msg[:120])
         reply = await agent_kernel.ask(conv_id, user_msg)
@@ -233,6 +313,8 @@ def main() -> None:
     app.router.add_post("/api/chat", chat_api)
     app.router.add_static("/static", STATIC_DIR)
     app.router.add_get("/api/files/{filename}", download_file)
+    app.on_startup.append(_on_startup)
+    app.on_cleanup.append(_on_cleanup)
 
     # Azure App Service injects PORT env var; prefer it over settings for deployment
     port = int(os.environ.get("PORT", settings.bot_port))
