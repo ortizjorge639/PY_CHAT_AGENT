@@ -91,6 +91,39 @@ def _user_can_download(request: web.Request) -> bool:
     return settings.file_download_group_id in _get_user_group_ids(request)
 
 
+def _get_easy_auth_context(request: web.Request) -> dict[str, str]:
+    """Extract best-effort user context from Easy Auth headers for logging."""
+    raw = request.headers.get(EASY_AUTH_PRINCIPAL, "")
+    if not raw:
+        return {"user_id": "", "user_name": ""}
+    try:
+        decoded = json.loads(base64.b64decode(raw))
+    except Exception as exc:
+        logger.warning("Failed to decode %s for logging: %s", EASY_AUTH_PRINCIPAL, exc)
+        return {"user_id": "", "user_name": ""}
+
+    claims = {claim.get("typ", ""): claim.get("val", "") for claim in decoded.get("claims", [])}
+    return {
+        "user_id": claims.get("oid") or claims.get("sub") or claims.get("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier", ""),
+        "user_name": claims.get("name") or claims.get("preferred_username") or claims.get("upn") or "",
+    }
+
+
+def _activity_context(activity: Activity) -> dict[str, str]:
+    """Extract consistent conversation and user details from a Bot Framework activity."""
+    conversation_id = getattr(getattr(activity, "conversation", None), "id", "") or ""
+    from_property = getattr(activity, "from_property", None)
+    user_id = getattr(from_property, "id", "") or ""
+    user_name = getattr(from_property, "name", "") or ""
+    timestamp = str(getattr(activity, "timestamp", "") or "")
+    return {
+        "conversation_id": conversation_id,
+        "user_id": user_id,
+        "user_name": user_name,
+        "timestamp": timestamp,
+    }
+
+
 # ── Easy Auth middleware ────────────────────────────────
 # When REQUIRE_AUTH=true, rejects web-UI requests that lack a valid
 # identity, providing defense-in-depth on top of the platform-level
@@ -202,13 +235,25 @@ async def messages(req: web.Request) -> web.Response:
     """POST /api/messages — Bot Framework webhook."""
     try:
         body = await req.json()
-        logger.info("Received activity type: %s", body.get("type", "unknown"))
         activity = Activity().deserialize(body)
+        context = _activity_context(activity)
+        logger.info(
+            "Received bot activity type=%s conversation_id=%s user_id=%s user_name=%s timestamp=%s",
+            body.get("type", "unknown"),
+            context["conversation_id"],
+            context["user_id"],
+            context["user_name"],
+            context["timestamp"],
+        )
         auth_header = req.headers.get("Authorization", "")
 
         if not _is_ready():
             logger.warning(
-                "Bot Framework message received before startup completed; returning warm-up response"
+                "Bot Framework message received before startup completed; returning warm-up response conversation_id=%s user_id=%s user_name=%s timestamp=%s",
+                context["conversation_id"],
+                context["user_id"],
+                context["user_name"],
+                context["timestamp"],
             )
             response = await adapter.process_activity(
                 activity,
@@ -236,17 +281,38 @@ async def chat_api(req: web.Request) -> web.Response:
         body = await req.json()
         user_msg = (body.get("message") or "").strip()
         conv_id = body.get("conversation_id", "web-default")
+        identity = _get_easy_auth_context(req)
+        timestamp = body.get("timestamp") or ""
 
         if not user_msg:
             return web.json_response({"reply": "Please send a message."})
 
         if not _is_ready():
-            logger.warning("Web chat request received before startup completed")
+            logger.warning(
+                "Web chat request received before startup completed conversation_id=%s user_id=%s user_name=%s timestamp=%s",
+                conv_id,
+                identity["user_id"],
+                identity["user_name"],
+                timestamp,
+            )
             return web.json_response({"reply": _warmup_message()})
 
-        logger.info("User [%s]: %s", conv_id, user_msg[:120])
+        logger.info(
+            "User message conversation_id=%s user_id=%s user_name=%s timestamp=%s text=%s",
+            conv_id,
+            identity["user_id"],
+            identity["user_name"],
+            timestamp,
+            user_msg[:120],
+        )
         reply = await agent_kernel.ask(conv_id, user_msg)
-        logger.info("Bot [%s]: %s", conv_id, reply["text"][:200])
+        logger.info(
+            "Bot message conversation_id=%s user_id=%s user_name=%s text=%s",
+            conv_id,
+            identity["user_id"],
+            identity["user_name"],
+            reply["text"][:200],
+        )
 
         # Only include file download links if the user is in the download group
         can_download = _user_can_download(req)

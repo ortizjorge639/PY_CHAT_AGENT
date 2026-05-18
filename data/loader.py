@@ -187,29 +187,25 @@ class DataLoader:
                 )
                 time.sleep(retry_delay)
 
-        tables = s.sql_table_list
-        if not tables:
+        table = s.sql_table.strip()
+        if not table:
             conn.close()
-            raise ValueError("No SQL tables configured. Set SQL_TABLES or SQL_TABLE.")
+            raise ValueError("No SQL table configured. Set SQL_TABLE.")
 
-        primary = s.sql_primary_table or tables[0]
-
-        for table in tables:
-            df = pd.read_sql(f"SELECT * FROM {_bracket_table_name(table)}", conn)
-            df.columns = [str(c).strip() for c in df.columns]
-            # Coerce string columns that contain numeric values to numeric dtype
-            for col in df.columns:
-                if df[col].dtype == object or pd.api.types.is_string_dtype(df[col]):
-                    converted = pd.to_numeric(df[col], errors="coerce")
-                    if converted.notna().sum() == df[col].notna().sum() and converted.notna().sum() > 0:
-                        df[col] = converted
-            role = "primary" if table == primary else "supplemental"
-            self._tables[table] = df
-            self._table_roles[table] = role
-            logger.info(
-                "Loaded SQL table '%s' [%s] (%d rows, %d cols)",
-                table, role, len(df), len(df.columns),
-            )
+        df = pd.read_sql(f"SELECT * FROM {_bracket_table_name(table)}", conn)
+        df.columns = [str(c).strip() for c in df.columns]
+        # Coerce string columns that contain numeric values to numeric dtype
+        for col in df.columns:
+            if df[col].dtype == object or pd.api.types.is_string_dtype(df[col]):
+                converted = pd.to_numeric(df[col], errors="coerce")
+                if converted.notna().sum() == df[col].notna().sum() and converted.notna().sum() > 0:
+                    df[col] = converted
+        self._tables[table] = df
+        self._table_roles[table] = "primary"
+        logger.info(
+            "Loaded SQL table '%s' [primary] (%d rows, %d cols)",
+            table, len(df), len(df.columns),
+        )
 
         conn.close()
 
