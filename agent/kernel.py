@@ -178,6 +178,16 @@ class AgentKernel:
         )
         self._sessions: Dict[str, object] = {}
 
+    def reset_conversation(self, conversation_id: str) -> bool:
+        """Remove one in-memory session; returns True when one existed."""
+        return self._sessions.pop(conversation_id, None) is not None
+
+    def reset_all_sessions(self) -> int:
+        """Remove all in-memory sessions and return the number cleared."""
+        cleared = len(self._sessions)
+        self._sessions.clear()
+        return cleared
+
     def _get_session(self, conversation_id: str):
         if conversation_id not in self._sessions:
             self._sessions[conversation_id] = self._agent.create_session()
