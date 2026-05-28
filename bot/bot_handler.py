@@ -14,11 +14,15 @@ logger = logging.getLogger(__name__)
 class ChatBot(ActivityHandler):
     """Handles incoming Teams / Emulator messages and delegates to the SK agent."""
 
-    def __init__(self, agent: AgentKernel) -> None:
+    def __init__(
+        self,
+        agent: AgentKernel,
+        freshness: ConversationFreshnessSkill | None = None,
+    ) -> None:
         super().__init__()
         self._agent = agent
         self._processed_ids: dict[str, str] = {}  # conversation_id → last activity_id
-        self._freshness = ConversationFreshnessSkill()
+        self._freshness = freshness or ConversationFreshnessSkill()
 
     async def on_message_activity(self, turn_context: TurnContext) -> None:
         """Process each user message through the AI agent."""

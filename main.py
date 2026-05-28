@@ -20,6 +20,7 @@ from botbuilder.schema import Activity
 
 from config.settings import Settings
 from bot.bot_handler import ChatBot
+from bot.conversation_freshness_skill import ConversationFreshnessSkill
 from agent.kernel import AgentKernel
 from data.loader import DataLoader
 
@@ -167,6 +168,7 @@ adapter.on_turn_error = _on_error
 data_loader = DataLoader(settings, auto_load=False)
 agent_kernel: AgentKernel | None = None
 bot: ChatBot | None = None
+conversation_freshness = ConversationFreshnessSkill()
 _startup_state: dict[str, str | bool] = {
     "ready": False,
     "failed": False,
@@ -196,7 +198,7 @@ async def _initialize_components_loop(app: web.Application) -> None:
             logger.info("Startup initialization: loading data...")
             data_loader.load_now()
             agent_kernel = AgentKernel(settings, data_loader)
-            bot = ChatBot(agent_kernel)
+            bot = ChatBot(agent_kernel, freshness=conversation_freshness)
             _startup_state["ready"] = True
             _startup_state["failed"] = False
             _startup_state["last_error"] = ""
@@ -282,6 +284,11 @@ async def chat_api(req: web.Request) -> web.Response:
         user_msg = (body.get("message") or "").strip()
         conv_id = body.get("conversation_id", "web-default")
         identity = _get_easy_auth_context(req)
+        user_id = (
+            identity["user_id"]
+            or (body.get("user_id") or "").strip()
+            or f"web-conversation:{conv_id}"
+        )
         timestamp = body.get("timestamp") or ""
 
         if not user_msg:
@@ -291,16 +298,52 @@ async def chat_api(req: web.Request) -> web.Response:
             logger.warning(
                 "Web chat request received before startup completed conversation_id=%s user_id=%s user_name=%s timestamp=%s",
                 conv_id,
-                identity["user_id"],
+                user_id,
                 identity["user_name"],
                 timestamp,
             )
             return web.json_response({"reply": _warmup_message()})
 
+        if conversation_freshness.is_reset_command(user_msg):
+            agent_kernel.reset_conversation(conv_id)
+            conversation_freshness.apply_reset(user_id, conv_id)
+            logger.info(
+                "Web chat reset requested conversation_id=%s user_id=%s user_name=%s",
+                conv_id,
+                user_id,
+                identity["user_name"],
+            )
+            return web.json_response({
+                "reply": "Session reset for this chat. You can continue here with a fresh context.",
+                "data_chunks": [],
+                "files": [],
+            })
+
+        decision = conversation_freshness.evaluate(user_id, conv_id)
+        if decision.should_block:
+            logger.warning(
+                "Web chat stale conversation blocked user_id=%s stale_conversation=%s",
+                user_id,
+                conv_id,
+            )
+            return web.json_response({
+                "reply": decision.stale_message,
+                "data_chunks": [],
+                "files": [],
+            })
+
+        if decision.switched_from and decision.switched_to:
+            logger.info(
+                "Web chat conversation switch detected. user_id=%s old_conversation=%s new_conversation=%s",
+                user_id,
+                decision.switched_from,
+                decision.switched_to,
+            )
+
         logger.info(
             "User message conversation_id=%s user_id=%s user_name=%s timestamp=%s text=%s",
             conv_id,
-            identity["user_id"],
+            user_id,
             identity["user_name"],
             timestamp,
             user_msg[:120],
@@ -309,7 +352,7 @@ async def chat_api(req: web.Request) -> web.Response:
         logger.info(
             "Bot message conversation_id=%s user_id=%s user_name=%s text=%s",
             conv_id,
-            identity["user_id"],
+            user_id,
             identity["user_name"],
             reply["text"][:200],
         )
