@@ -6,6 +6,7 @@ from botbuilder.core import ActivityHandler, TurnContext
 from botbuilder.schema import Activity, ActivityTypes
 
 from agent.kernel import AgentKernel
+from bot.conversation_freshness_skill import ConversationFreshnessSkill
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ class ChatBot(ActivityHandler):
         super().__init__()
         self._agent = agent
         self._processed_ids: dict[str, str] = {}  # conversation_id → last activity_id
+        self._freshness = ConversationFreshnessSkill()
 
     async def on_message_activity(self, turn_context: TurnContext) -> None:
         """Process each user message through the AI agent."""
@@ -25,16 +27,51 @@ class ChatBot(ActivityHandler):
             await turn_context.send_activity("Please send a text message.")
             return
 
-        # Dedup: skip if Teams retried the same activity
+        user_id = turn_context.activity.from_property.id
+        user_name = turn_context.activity.from_property.name
         conversation_id = turn_context.activity.conversation.id
+
+        # Conversation reset command: clear only the current thread session.
+        if self._freshness.is_reset_command(user_text):
+            self._agent.reset_conversation(conversation_id)
+            self._processed_ids.pop(conversation_id, None)
+            self._freshness.apply_reset(user_id, conversation_id)
+            logger.info(
+                "Reset requested for conversation [%s] by user [%s] (%s)",
+                conversation_id,
+                user_id,
+                user_name,
+            )
+            await turn_context.send_activity(
+                "Session reset for this chat. You can continue here with a fresh context."
+            )
+            return
+
+        decision = self._freshness.evaluate(user_id, conversation_id)
+        if decision.should_block:
+            logger.warning(
+                "Stale conversation blocked. user_id=%s stale_conversation=%s",
+                user_id,
+                conversation_id,
+            )
+            await turn_context.send_activity(decision.stale_message or "This chat session is outdated.")
+            return
+
+        if decision.switched_from and decision.switched_to:
+            logger.info(
+                "Conversation switch detected. user_id=%s old_conversation=%s new_conversation=%s",
+                user_id,
+                decision.switched_from,
+                decision.switched_to,
+            )
+
+        # Dedup: skip if Teams retried the same activity
         activity_id = turn_context.activity.id or ""
         if activity_id and self._processed_ids.get(conversation_id) == activity_id:
             logger.warning("Skipping duplicate activity %s", activity_id)
             return
         if activity_id:
             self._processed_ids[conversation_id] = activity_id
-        user_id = turn_context.activity.from_property.id
-        user_name = turn_context.activity.from_property.name
         logger.info(
             "User [%s] [%s] (%s): %s",
             conversation_id,
