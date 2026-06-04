@@ -2,8 +2,6 @@
 
 Observability for the Obsolescence Chat Bot using Azure Monitor OpenTelemetry. Once enabled, requests, dependencies (Azure OpenAI, SQL), exceptions, and Python logs are all tracked automatically.
 
-Once enabled, requests, dependencies (Azure OpenAI, SQL), exceptions, and Python logs are all tracked automatically.
-
 ---
 
 ## 1. Prerequisites
