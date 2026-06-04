@@ -1,0 +1,136 @@
+# Azure DevOps CI/CD pipeline — code-only deploy to a pre-provisioned Azure App Service (Linux, Python 3.11).
+# Infra (App Service Plan, Web App, Relay, Hybrid Connection) is assumed to already exist (deployed via `azd up`).
+#
+# Required pipeline variables / setup:
+#   - azureServiceConnection : name of the Azure Resource Manager service connection in your ADO project
+#                              (Project Settings -> Service connections -> New -> Azure Resource Manager)
+#   - appServiceName         : the existing Web App name (e.g. pyhcsql-app-4bk4n7n2rqgs4)
+#   - resourceGroupName      : the resource group containing the Web App (e.g. rg-extron-on-prem-sql-server-hcm)
+#
+# Set these as pipeline variables in the ADO UI, or override them at queue time.
+
+trigger:
+  branches:
+    include:
+      - master
+  paths:
+    exclude:
+      - infra/**
+      - README.md
+      - '**/*.md'
+
+pr:
+  branches:
+    include:
+      - master
+  paths:
+    exclude:
+      - infra/**
+      - README.md
+      - '**/*.md'
+
+variables:
+  pythonVersion: '3.11'
+  azureServiceConnection: 'extron-hcm-sub'
+  appServiceName: 'pyhcsql-app-4bk4n7n2rqgs4'
+  resourceGroupName: 'rg-extron-on-prem-sql-server-hcm'
+  artifactName: 'web'
+
+stages:
+  - stage: Build
+    displayName: Build & package
+    jobs:
+      - job: Build
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: UsePythonVersion@0
+            displayName: Use Python $(pythonVersion)
+            inputs:
+              versionSpec: '$(pythonVersion)'
+              addToPath: true
+
+          - script: |
+              python -m pip install --upgrade pip
+              python -m pip install --target="$(Build.SourcesDirectory)/.python_packages/lib/site-packages" -r requirements.txt
+            displayName: Install dependencies into .python_packages
+
+          - task: ArchiveFiles@2
+            displayName: Zip app for deployment
+            inputs:
+              rootFolderOrFile: '$(Build.SourcesDirectory)'
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: '$(Build.ArtifactStagingDirectory)/$(artifactName).zip'
+              replaceExistingArchive: true
+              # Exclude things that shouldn't ship to App Service
+              # (App Service runs the unzipped contents; .git/.venv/infra/etc. are unnecessary)
+              exclude: |
+                .git/**
+                .github/**
+                .venv/**
+                infra/**
+                tests/**
+                **/__pycache__/**
+                *.md
+                azure-pipelines.yml
+                azure.yaml
+                .azure/**
+                *.log
+
+          - publish: '$(Build.ArtifactStagingDirectory)/$(artifactName).zip'
+            artifact: $(artifactName)
+            displayName: Publish pipeline artifact
+
+  - stage: Deploy
+    displayName: Deploy to App Service
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+    jobs:
+      - deployment: DeployWeb
+        environment: 'production'
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: $(artifactName)
+
+                - task: AzureWebApp@1
+                  displayName: Deploy zip package to $(appServiceName)
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    appType: webAppLinux
+                    appName: '$(appServiceName)'
+                    resourceGroupName: '$(resourceGroupName)'
+                    package: '$(Pipeline.Workspace)/$(artifactName)/$(artifactName).zip'
+                    deploymentMethod: zipDeploy
+                    # Preserve the startup command already set on the App Service
+                    # (configured by the Bicep: `bash startup.sh`). We don't override it here.
+
+                - task: AzureCLI@2
+                  displayName: Smoke test /healthz
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      url="https://$(appServiceName).azurewebsites.net/healthz"
+                      echo "Probing $url ..."
+                      # App Service can take a moment to swap to the new container after zip deploy.
+                      for i in 1 2 3 4 5 6 7 8 9 10; do
+                        code=$(curl -s -o /tmp/body -w "%{http_code}" --max-time 60 "$url" || true)
+                        echo "Attempt $i: HTTP $code"
+                        if [ "$code" = "200" ]; then
+                          cat /tmp/body
+                          exit 0
+                        fi
+                        sleep 15
+                      done
+                      echo "Health check failed after 10 attempts."
+                      cat /tmp/body || true
+                      exit 1
+ 

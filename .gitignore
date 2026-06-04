@@ -29,3 +29,8 @@ generated/
 
 # Byte-compiled / optimized
 *.py[cod]
+
+# Local SQL helper scripts (contain hardcoded credentials)
+scripts/helpers/check_part.py
+scripts/helpers/ground_truth_accuracy.py
+scripts/helpers/scale_mock_data.py
