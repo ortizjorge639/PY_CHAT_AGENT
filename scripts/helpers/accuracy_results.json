@@ -1,0 +1,378 @@
+[
+  {
+    "category": "COUNT",
+    "label": "scrap-eligible count",
+    "query": "how many parts can be scrapped",
+    "expected": 3133,
+    "got": 3133,
+    "status": "PASS",
+    "reply_snippet": "There are 3,133 parts that may be eligible to be scrapped."
+  },
+  {
+    "category": "COUNT",
+    "label": "total row count",
+    "query": "how many total parts are in the dataset",
+    "expected": 30000,
+    "got": 30024,
+    "status": "CLOSE",
+    "reply_snippet": "There are a total of 30,024 parts in the dataset\u201430,000 parts from the \"Obsolescence_Results\" table and 24 parts from the \"CRmaster_ModelResults\" table."
+  },
+  {
+    "category": "COUNT",
+    "label": "open sales order count",
+    "query": "how many parts have open sales orders",
+    "expected": 891,
+    "got": 891,
+    "status": "PASS",
+    "reply_snippet": "There are 891 parts with the status \"Open Sales Order\" in the dataset."
+  },
+  {
+    "category": "COUNT",
+    "label": "open work order count",
+    "query": "how many parts have open work orders",
+    "expected": 1185,
+    "got": 1185,
+    "status": "PASS",
+    "reply_snippet": "There are 1,185 parts with open work orders in the dataset."
+  },
+  {
+    "category": "COUNT",
+    "label": "not-eligible total count",
+    "query": "how many parts are not eligible for scrap",
+    "expected": 8013,
+    "got": 2368,
+    "status": "FAIL",
+    "reply_snippet": "There are 2,368 parts with the status \"NOT eligible for scrap - Bin Location-[SHOW]\" in the dataset."
+  },
+  {
+    "category": "COUNT",
+    "label": "sold in past 2 years count",
+    "query": "how many parts were sold in the past two years",
+    "expected": 1481,
+    "got": 1481,
+    "status": "PASS",
+    "reply_snippet": "There are 1,481 parts with the status \"Sold in Past Two Years\" in the dataset."
+  },
+  {
+    "category": "COUNT",
+    "label": "need further review count",
+    "query": "how many parts need further review",
+    "expected": 2160,
+    "got": 2160,
+    "status": "PASS",
+    "reply_snippet": "There are 2,160 parts that need further review because they have no BOM."
+  },
+  {
+    "category": "COUNT",
+    "label": "repair usage count",
+    "query": "how many parts have repair usage",
+    "expected": 624,
+    "got": 624,
+    "status": "PASS",
+    "reply_snippet": "There are 624 parts with the status \"REPAIR USAGE- Need Further review\" in the dataset."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "91-8430-02LF -> May be eligible to be scrapped",
+    "query": "what is the status of part 91-8430-02LF",
+    "expected": "May be eligible to be scrapped",
+    "got": "part 91-8430-02lf may be eligible to be scrapped.",
+    "status": "PASS",
+    "reply_snippet": "Part 91-8430-02LF may be eligible to be scrapped."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "14-5676-11 -> May be eligible to be scrapped",
+    "query": "what is the status of part 14-5676-11",
+    "expected": "May be eligible to be scrapped",
+    "got": "the status of part 14-5676-11 is \"may be eligible to be scrapped.\"",
+    "status": "PASS",
+    "reply_snippet": "The status of part 14-5676-11 is \"May be eligible to be scrapped.\""
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "37-8647-21 -> NOT eligible for scrap - Bin Location-[SHOW]",
+    "query": "what is the status of part 37-8647-21",
+    "expected": "NOT eligible for scrap - Bin Location-[SHOW]",
+    "got": "part 37-8647-21 is not eligible for scrap because it is currently in a trade show.",
+    "status": "PARTIAL",
+    "reply_snippet": "Part 37-8647-21 is not eligible for scrap because it is currently in a trade show."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "60-2632-11 -> NOT eligible for scrap - Bin Stock",
+    "query": "what is the status of part 60-2632-11",
+    "expected": "NOT eligible for scrap - Bin Stock",
+    "got": "part 60-2632-11 is not eligible for scrapping because it is currently in bin stock.",
+    "status": "PARTIAL",
+    "reply_snippet": "Part 60-2632-11 is not eligible for scrapping because it is currently in bin stock."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "34-7614-02 -> NOT eligible for scrap - Custom Button",
+    "query": "what is the status of part 34-7614-02",
+    "expected": "NOT eligible for scrap - Custom Button",
+    "got": "part 34-7614-02 is not eligible for scrap because it is a custom button.",
+    "status": "PARTIAL",
+    "reply_snippet": "Part 34-7614-02 is not eligible for scrap because it is a custom button."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "93-9420-02 -> NOT eligible for scrap - NOT A PHYSICAL PART",
+    "query": "what is the status of part 93-9420-02",
+    "expected": "NOT eligible for scrap - NOT A PHYSICAL PART",
+    "got": "part 93-9420-02 is not eligible for scrap because it is not a physical part.",
+    "status": "PARTIAL",
+    "reply_snippet": "Part 93-9420-02 is not eligible for scrap because it is not a physical part."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "14-1317-01C -> NOT eligible for scrap - International Powercord",
+    "query": "what is the status of part 14-1317-01C",
+    "expected": "NOT eligible for scrap - International Powercord",
+    "got": "part 14-1317-01c is not eligible for scrap because it is an international powercord.",
+    "status": "PARTIAL",
+    "reply_snippet": "Part 14-1317-01C is not eligible for scrap because it is an international powercord."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "34-6669-03 -> Product USAGE",
+    "query": "what is the status of part 34-6669-03",
+    "expected": "Product USAGE",
+    "got": "the status of part 34-6669-03 is \"product usage,\" meaning it had product usage in the last two years. the details indicate it is active in one product line.",
+    "status": "PASS",
+    "reply_snippet": "The status of part 34-6669-03 is \"Product USAGE,\" meaning it had product usage in the last two years. The details indicate it is active in one product line."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "31-6869-02LF -> Sold in Past Two Years",
+    "query": "what is the status of part 31-6869-02LF",
+    "expected": "Sold in Past Two Years",
+    "got": "part 31-6869-02lf is not eligible to be scrapped because it was sold in the past two years.",
+    "status": "PARTIAL",
+    "reply_snippet": "Part 31-6869-02LF is not eligible to be scrapped because it was sold in the past two years."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "47-5404-01C -> Open Sales Order",
+    "query": "what is the status of part 47-5404-01C",
+    "expected": "Open Sales Order",
+    "got": "part 47-5404-01c has the status \"open sales order\" because it has an associated sales order (so-278196).",
+    "status": "PASS",
+    "reply_snippet": "Part 47-5404-01C has the status \"Open Sales Order\" because it has an associated sales order (SO-278196)."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "73-6197-22 -> Open WorkOrder",
+    "query": "what is the status of part 73-6197-22",
+    "expected": "Open WorkOrder",
+    "got": "part 73-6197-22 has the status \"open workorder\" because there is an open work order (wo-276203) associated with it.",
+    "status": "PASS",
+    "reply_snippet": "Part 73-6197-22 has the status \"Open WorkOrder\" because there is an open work order (WO-276203) associated with it."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "22-2977-01 -> Need Further Review-NO BOM",
+    "query": "what is the status of part 22-2977-01",
+    "expected": "Need Further Review-NO BOM",
+    "got": "part 22-2977-01 needs further review because it is flagged with \"no bom.\"",
+    "status": "PARTIAL",
+    "reply_snippet": "Part 22-2977-01 needs further review because it is flagged with \"NO BOM.\""
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "55-7450-03 -> Component Request - Please review Logid",
+    "query": "what is the status of part 55-7450-03",
+    "expected": "Component Request - Please review Logid",
+    "got": "part 55-7450-03 has the status \"component request - please review logid,\" indicating it needs further review as it was flagged in a component request as a possible replacement. the associated log id i",
+    "status": "PASS",
+    "reply_snippet": "Part 55-7450-03 has the status \"Component Request - Please review Logid,\" indicating it needs further review as it was flagged in a Component Request as a possible replacement. The associated log ID i"
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "33-9488-22 -> REPAIR USAGE- Need Further review",
+    "query": "what is the status of part 33-9488-22",
+    "expected": "REPAIR USAGE- Need Further review",
+    "got": "part 33-9488-22 has the status \"repair usage- need further review\" with a repair count of 1.",
+    "status": "PASS",
+    "reply_snippet": "Part 33-9488-22 has the status \"REPAIR USAGE- Need Further review\" with a repair count of 1."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "61-2514-02A -> In WhereUsed with parent",
+    "query": "what is the status of part 61-2514-02A",
+    "expected": "In WhereUsed with parent",
+    "got": "part 61-2514-02a is not eligible to be scrapped because it has a parent part (60-3977-01) that is either active or in development.",
+    "status": "PARTIAL",
+    "reply_snippet": "Part 61-2514-02A is not eligible to be scrapped because it has a parent part (60-3977-01) that is either active or in development."
+  },
+  {
+    "category": "PART_STATUS",
+    "label": "82-2931-01LF -> No stock",
+    "query": "what is the status of part 82-2931-01LF",
+    "expected": "No stock",
+    "got": "part 82-2931-01lf is not eligible to be scrapped because it is not currently in stock.",
+    "status": "FAIL",
+    "reply_snippet": "Part 82-2931-01LF is not eligible to be scrapped because it is not currently in stock."
+  },
+  {
+    "category": "XREF_SCRAP_ELIGIBLE",
+    "label": "91-8430-02LF should be scrap-eligible",
+    "query": "is part 91-8430-02LF eligible to be scrapped",
+    "expected": "Yes - May be eligible to be scrapped",
+    "got": "part 91-8430-02lf may be eligible to be scrapped.",
+    "status": "PASS",
+    "reply_snippet": "Part 91-8430-02LF may be eligible to be scrapped."
+  },
+  {
+    "category": "XREF_SCRAP_ELIGIBLE",
+    "label": "14-5676-11 should be scrap-eligible",
+    "query": "is part 14-5676-11 eligible to be scrapped",
+    "expected": "Yes - May be eligible to be scrapped",
+    "got": "part 14-5676-11 may be eligible to be scrapped.",
+    "status": "PASS",
+    "reply_snippet": "Part 14-5676-11 may be eligible to be scrapped."
+  },
+  {
+    "category": "XREF_NOT_ELIGIBLE",
+    "label": "60-2632-11 should NOT be eligible (NOT eligible for scrap - Bin Stock)",
+    "query": "is part 60-2632-11 eligible to be scrapped",
+    "expected": "No - NOT eligible for scrap - Bin Stock",
+    "got": "part 60-2632-11 is not eligible to be scrapped because it is currently in bin stock.",
+    "status": "PASS",
+    "reply_snippet": "Part 60-2632-11 is not eligible to be scrapped because it is currently in bin stock."
+  },
+  {
+    "category": "XREF_NOT_ELIGIBLE",
+    "label": "34-7614-02 should NOT be eligible (NOT eligible for scrap - Custom Button)",
+    "query": "is part 34-7614-02 eligible to be scrapped",
+    "expected": "No - NOT eligible for scrap - Custom Button",
+    "got": "part 34-7614-02 is not eligible to be scrapped because it is a custom button.",
+    "status": "PASS",
+    "reply_snippet": "Part 34-7614-02 is not eligible to be scrapped because it is a custom button."
+  },
+  {
+    "category": "XREF_NOT_ELIGIBLE",
+    "label": "93-9420-02 should NOT be eligible (NOT eligible for scrap - NOT A PHYSICAL PART)",
+    "query": "is part 93-9420-02 eligible to be scrapped",
+    "expected": "No - NOT eligible for scrap - NOT A PHYSICAL PART",
+    "got": "part 93-9420-02 is not eligible to be scrapped because it is not a physical part.",
+    "status": "PASS",
+    "reply_snippet": "Part 93-9420-02 is not eligible to be scrapped because it is not a physical part."
+  },
+  {
+    "category": "INTERPRETATION",
+    "label": "WhereUsed interpretation",
+    "query": "what does 'In WhereUsed with parent' status mean",
+    "expected": [
+      "where",
+      "used",
+      "parent",
+      "assembly",
+      "component"
+    ],
+    "got": [
+      "where",
+      "used",
+      "parent"
+    ],
+    "status": "PARTIAL",
+    "reply_snippet": "The status \"In WhereUsed with parent\" means that the part has a parent part that is either active or in development. It indicates that the part is tied to an active or potentially ongoing use case thr"
+  },
+  {
+    "category": "INTERPRETATION",
+    "label": "Bin Location SHOW interpretation",
+    "query": "what does 'NOT eligible for scrap - Bin Location-[SHOW]' mean",
+    "expected": [
+      "show",
+      "bin",
+      "location",
+      "display",
+      "not eligible"
+    ],
+    "got": [
+      "show",
+      "bin",
+      "location",
+      "not eligible"
+    ],
+    "status": "PASS",
+    "reply_snippet": "The status \"NOT eligible for scrap - Bin Location-[SHOW]\" means that the part is currently located in a trade show location and, therefore, cannot be scrapped."
+  },
+  {
+    "category": "INTERPRETATION",
+    "label": "Component Request interpretation",
+    "query": "what does 'Component Request - Please review Logid' mean",
+    "expected": [
+      "component",
+      "request",
+      "log",
+      "review"
+    ],
+    "got": [
+      "component",
+      "request",
+      "log",
+      "review"
+    ],
+    "status": "PASS",
+    "reply_snippet": "The status \"Component Request - Please review Logid\" means the part needs further review and has been flagged in the Component Request as a possible replacement."
+  },
+  {
+    "category": "INTERPRETATION",
+    "label": "Repair Usage interpretation",
+    "query": "what does 'REPAIR USAGE- Need Further review' mean",
+    "expected": [
+      "repair",
+      "review",
+      "usage"
+    ],
+    "got": [
+      "repair",
+      "review",
+      "usage"
+    ],
+    "status": "PASS",
+    "reply_snippet": "The status \"REPAIR USAGE- Need Further review\" means the part has been used for repairs in the past three years and requires further review to determine its eligibility or disposition."
+  },
+  {
+    "category": "HALLUCINATION",
+    "label": "Fake part 99-9999-99",
+    "query": "what is the status of part 99-9999-99",
+    "expected": "Not found",
+    "got": "i don\u2019t have any data for part 99-9999-99 in either dataset, so i can't determine its status.",
+    "status": "FAIL",
+    "reply_snippet": "I don\u2019t have any data for part 99-9999-99 in either dataset, so I can't determine its status."
+  },
+  {
+    "category": "HALLUCINATION",
+    "label": "Leading question - 60-2632-11 (actually Bin Stock)",
+    "query": "I was told part 60-2632-11 is eligible to be scrapped, can you confirm",
+    "expected": "Should say NOT eligible - Bin Stock",
+    "got": "part 60-2632-11 is not eligible to be scrapped because it is in bin stock.",
+    "status": "PASS",
+    "reply_snippet": "Part 60-2632-11 is not eligible to be scrapped because it is in bin stock."
+  },
+  {
+    "category": "HALLUCINATION",
+    "label": "Wrong status claim - 34-6669-03 (actually Product USAGE)",
+    "query": "does part 34-6669-03 have an open sales order",
+    "expected": "Should say no \u2014 status is Product USAGE",
+    "got": "part 34-6669-03 does not have an open sales order; its status is \"product usage,\" meaning it had product usage in the last two years.",
+    "status": "PASS",
+    "reply_snippet": "Part 34-6669-03 does not have an open sales order; its status is \"Product USAGE,\" meaning it had product usage in the last two years."
+  },
+  {
+    "category": "MULTI_PART",
+    "label": "3 parts with different statuses",
+    "query": "what is the status of parts 91-8430-02LF, 60-2632-11, and 34-6669-03",
+    "expected": "91-8430-02LF=eligible, 60-2632-11=not eligible, 34-6669-03=product usage",
+    "got": {
+      "91-8430-02LF": true,
+      "60-2632-11": true,
+      "34-6669-03": true
+    },
+    "status": "PASS",
+    "reply_snippet": "Here is the status of the requested parts:\n\n- Part **91-8430-02LF**: May be eligible to be scrapped.\n- Part **60-2632-11**: Not eligible for scrap because it is in bin stock.\n- Part **34-6669-03**: Not eligible for scrap due to product usage in the last two years."
+  }
+]

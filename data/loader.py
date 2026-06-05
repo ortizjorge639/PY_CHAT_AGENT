@@ -1,6 +1,7 @@
-"""Data access layer â€” loads from Excel or SQL Server based on DATASOURCE flag."""
+"""Data access layer — loads from Excel or SQL Server based on DATASOURCE flag."""
 
 import logging
+import time
 from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
@@ -26,10 +27,10 @@ def _bracket_table_name(raw: str) -> str:
 def _fuzzy_resolve(needle: str, haystack: list[str], label: str = "value") -> str:
     """Case-insensitive lookup with fuzzy fallback.
 
-    1. Exact match â†’ return as-is
-    2. Case-insensitive match â†’ return the canonical form
-    3. Fuzzy match (>0.6 cutoff) â†’ return best match
-    4. No match â†’ raise ValueError with suggestions
+    1. Exact match → return as-is
+    2. Case-insensitive match → return the canonical form
+    3. Fuzzy match (>0.6 cutoff) → return best match
+    4. No match → raise ValueError with suggestions
     """
     if needle in haystack:
         return needle
@@ -50,13 +51,38 @@ def _fuzzy_resolve(needle: str, haystack: list[str], label: str = "value") -> st
 class DataLoader:
     """Loads tabular data from Excel files or SQL Server and exposes query helpers."""
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, auto_load: bool = True) -> None:
         self._settings = settings
         self._tables: dict[str, pd.DataFrame] = {}
-        self._table_roles: dict[str, str] = {}  # table_name â†’ "primary" | "supplemental"
-        self._load()
+        self._table_roles: dict[str, str] = {}  # table_name → "primary" | "supplemental"
+        self._is_loaded = False
+        self._load_error: Exception | None = None
+        if auto_load:
+            self.load_now()
 
-    # â”€â”€ loaders â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    @property
+    def is_loaded(self) -> bool:
+        """Whether tables have been loaded successfully."""
+        return self._is_loaded
+
+    @property
+    def load_error(self) -> Exception | None:
+        """Most recent loading error, if any."""
+        return self._load_error
+
+    def load_now(self) -> None:
+        """Load configured data source now. Safe to call multiple times."""
+        if self._is_loaded:
+            return
+        try:
+            self._load()
+            self._is_loaded = True
+            self._load_error = None
+        except Exception as exc:
+            self._load_error = exc
+            raise
+
+    # ── loaders ──────────────────────────────────────────
 
     def _load(self) -> None:
         source = self._settings.datasource.lower()
@@ -122,7 +148,7 @@ class DataLoader:
 
     def _load_sql(self) -> None:
         try:
-            import pyodbc  # deferred import â€” only needed for SQL data source
+            import pyodbc  # deferred import — only needed for SQL data source
         except ImportError:
             raise ImportError(
                 "pyodbc is required when DATASOURCE=sql. "
@@ -145,21 +171,45 @@ class DataLoader:
         )
         logger.info("Connection string: %s", conn_str.replace(s.sql_password, "****"))
 
-        conn = pyodbc.connect(conn_str)
-        table = s.sql_table
+        max_retries = 3
+        retry_delay = 5  # seconds
+        for attempt in range(1, max_retries + 1):
+            try:
+                conn = pyodbc.connect(conn_str)
+                break
+            except pyodbc.OperationalError:
+                if attempt == max_retries:
+                    logger.error("SQL connection failed after %d attempts", max_retries)
+                    raise
+                logger.warning(
+                    "SQL connect attempt %d/%d failed, retrying in %ds...",
+                    attempt, max_retries, retry_delay,
+                )
+                time.sleep(retry_delay)
+
+        table = s.sql_table.strip()
+        if not table:
+            conn.close()
+            raise ValueError("No SQL table configured. Set SQL_TABLE.")
+
         df = pd.read_sql(f"SELECT * FROM {_bracket_table_name(table)}", conn)
         df.columns = [str(c).strip() for c in df.columns]
+        # Coerce string columns that contain numeric values to numeric dtype
+        for col in df.columns:
+            if df[col].dtype == object or pd.api.types.is_string_dtype(df[col]):
+                converted = pd.to_numeric(df[col], errors="coerce")
+                if converted.notna().sum() == df[col].notna().sum() and converted.notna().sum() > 0:
+                    df[col] = converted
         self._tables[table] = df
-        self._table_roles[table] = "primary"  # SQL source is always the primary dataset
-        conn.close()
+        self._table_roles[table] = "primary"
         logger.info(
-            "Loaded SQL table '%s' (%d rows, %d cols)",
-            table,
-            len(df),
-            len(df.columns),
+            "Loaded SQL table '%s' [primary] (%d rows, %d cols)",
+            table, len(df), len(df.columns),
         )
 
-    # â”€â”€ public query API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        conn.close()
+
+    # ── public query API ─────────────────────────────────
 
     def list_tables(self) -> list[str]:
         """Return names of all loaded tables."""
@@ -247,19 +297,63 @@ class DataLoader:
 
         return result.to_dict(orient="records")
 
-    # â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # ── helpers ──────────────────────────────────────────
+
+    def lookup_part(self, part_number: str) -> dict[str, Any]:
+        """Look up a part number across all tables that have a PartNumber column."""
+        tables_result: dict[str, list[dict]] = {}
+        columns_result: dict[str, list[str]] = {}
+
+        for table_name, df in self._tables.items():
+            if 'PartNumber' not in df.columns:
+                continue
+            matched = df[df['PartNumber'].astype(str).str.lower() == part_number.strip().lower()]
+            if not matched.empty:
+                tables_result[table_name] = matched.to_dict(orient='records')
+                columns_result[table_name] = list(matched.columns)
+
+        return {
+            'part_number': part_number,
+            'tables': tables_result,
+            'columns_by_table': columns_result,
+        }
+
+    def lookup_row(self, table_name: str, column: str, value: str) -> dict[str, Any]:
+        """Look up rows by any column+value pair in a specific table."""
+        df = self._get_table(table_name)
+        resolved_col = self._check_column(df, column, table_name)
+
+        # Numeric comparison for numeric columns
+        if pd.api.types.is_numeric_dtype(df[resolved_col]):
+            try:
+                num_val = float(value)
+                matched = df[df[resolved_col] == num_val]
+            except (ValueError, TypeError):
+                matched = df[df[resolved_col].astype(str).str.lower() == value.strip().lower()]
+        else:
+            matched = df[df[resolved_col].astype(str).str.lower() == value.strip().lower()]
+
+        return {
+            'table': table_name,
+            'column': resolved_col,
+            'value': value,
+            'rows': matched.to_dict(orient='records'),
+            'total': len(matched),
+            'columns': list(matched.columns),
+        }
+
 
     def _get_table(self, table_name: str) -> pd.DataFrame:
         resolved = _fuzzy_resolve(table_name, list(self._tables.keys()), label="Table")
         if resolved != table_name:
-            logger.info("Fuzzy-resolved table '%s' â†’ '%s'", table_name, resolved)
+            logger.info("Fuzzy-resolved table '%s' → '%s'", table_name, resolved)
         return self._tables[resolved]
 
     @staticmethod
     def _apply_filter(df: pd.DataFrame, column: str, value: str) -> pd.DataFrame:
         resolved_col = _fuzzy_resolve(column, list(df.columns), label="Column")
         if resolved_col != column:
-            logger.info("Fuzzy-resolved column '%s' â†’ '%s'", column, resolved_col)
+            logger.info("Fuzzy-resolved column '%s' → '%s'", column, resolved_col)
         # Use numeric comparison for numeric columns to avoid "0.8" != "0.80"
         if pd.api.types.is_numeric_dtype(df[resolved_col]):
             try:
@@ -269,7 +363,13 @@ class DataLoader:
                 pass
         # Fuzzy-match the filter value against actual unique values in the column
         unique_vals = df[resolved_col].dropna().astype(str).unique().tolist()
-        resolved_val = _fuzzy_resolve(value, unique_vals, label="Value")
+        if not unique_vals:
+            return df.iloc[0:0]  # empty DataFrame with same columns
+        try:
+            resolved_val = _fuzzy_resolve(value, unique_vals, label="Value")
+        except ValueError:
+            # Value doesn't exist in the column — return empty (0 rows), not an error
+            return df.iloc[0:0]
         return df[df[resolved_col].astype(str).str.lower() == resolved_val.lower()]
 
     @staticmethod
@@ -277,6 +377,6 @@ class DataLoader:
         """Resolve column name with fuzzy matching. Returns the canonical name."""
         resolved = _fuzzy_resolve(column, list(df.columns), label="Column")
         if resolved != column:
-            logger.info("Fuzzy-resolved column '%s' â†’ '%s'", column, resolved)
+            logger.info("Fuzzy-resolved column '%s' → '%s'", column, resolved)
         return resolved
 
