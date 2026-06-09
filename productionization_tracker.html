@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Extron Productionization Tracker</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --card: #ffffff;
+      --ink: #112033;
+      --muted: #5f6f81;
+      --accent: #0a7d7d;
+      --ok: #137333;
+      --warn: #b06000;
+      --line: #d8e0ea;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Segoe UI, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: linear-gradient(180deg, #eef4fa 0%, var(--bg) 60%);
+      color: var(--ink);
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 32px auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 16px rgba(17, 32, 51, 0.06);
+    }
+    h1, h2 { margin: 0 0 12px; }
+    h1 { font-size: 1.5rem; }
+    h2 { font-size: 1.1rem; }
+    p, li { color: var(--muted); }
+    ul { margin: 8px 0 0; padding-left: 18px; }
+    .meta {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    .pill {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      border: 1px solid var(--line);
+      background: #f7fafc;
+      color: #234;
+    }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+    }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+      padding: 10px 8px;
+    }
+    th { color: #25364a; }
+    .small { font-size: 0.88rem; }
+    .stamp { color: #4b6077; font-weight: 600; }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: #f4f8ff;
+      color: #29415c;
+    }
+    .b-done { background: #eaf6ee; color: #0d5f2b; }
+    .b-progress { background: #fff4e6; color: #8a4e00; }
+    .b-pending { background: #f3f6fb; color: #42566d; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Extron Teams App Productionization Tracker</h1>
+      <p class="small">Working tracker for branch-based productionization prep. This is reporting-only and does not introduce app features.</p>
+      <div class="meta">
+        <div><span class="pill">Branch: feat/prodization-init-tracker</span></div>
+        <div><span class="pill">Main branch modified: No</span></div>
+        <div><span class="pill">Status: In Progress</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Progress So Far</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Status</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Isolate work from main</td>
+            <td class="ok">Done</td>
+            <td>Moved current working state to a dedicated branch to avoid changes landing directly on main.</td>
+          </tr>
+          <tr>
+            <td>Baseline deployment/runtime drift review</td>
+            <td class="ok">Done</td>
+            <td>Identified startup command drift between pipeline, startup script, and Bicep app command line.</td>
+          </tr>
+          <tr>
+            <td>Ensure uncommitted changes stay compatible with main operation</td>
+            <td class="ok">Done</td>
+            <td>Restored backward-compatible SQL settings fields/properties in settings to avoid regressions while keeping behavior unchanged.</td>
+          </tr>
+          <tr>
+            <td>Productionization checklist mapping</td>
+            <td class="warn">In Progress</td>
+            <td>Checklist remains to be converted into owner/evidence/status format for execution tracking.</td>
+          </tr>
+          <tr>
+            <td>Tenant-portable infra and startup harmonization</td>
+            <td class="ok">Done</td>
+            <td>Aligned startup entrypoint and deployment config to existing main runtime path (main.py), with run-from-package settings normalized.</td>
+          </tr>
+          <tr>
+            <td>Main-operation deployment alignment pass</td>
+            <td class="ok">Done</td>
+            <td>Updated pipeline startup command, Bicep app command line, and startup.sh to remove main_test drift.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Current Top Risks (Observed)</h2>
+      <ul>
+        <li>Checklist governance items (owners, operational acceptance, and handoff evidence) are still mostly process-dependent and pending confirmation.</li>
+        <li>Provisioning-time validation drills are still pending even though design artifacts now exist.</li>
+        <li>Secret and identity hardening remains incomplete until Key Vault/managed identity wiring is confirmed end-to-end.</li>
+        <li>Environment constraint: rg-test is out of scope (unrelated project), so this initiative must use rg-dev (disposable) and/or rg-contoso-pilot.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Next Actions</h2>
+      <ul>
+        <li>Quota request has been submitted for App Service in East US 2 (with East US fallback); track support case SLA and escalation path.</li>
+        <li>Disposable validation lane is live in rg-dev (Container Apps); continue functional prompt runs and telemetry capture while quota is pending.</li>
+        <li>Create live alert rules and run validation drills from the observability checklist.</li>
+        <li>Review pilot security checklist with SME advisory input and record outcome.</li>
+        <li>Execute Day-0 cutover checklist on provisioning day and capture evidence.</li>
+      </ul>
+      <p class="stamp">Last updated: 2026-06-09</p>
+    </div>
+
+    <div class="card">
+      <h2>Current Plan Reminder</h2>
+      <ul>
+        <li>Primary path: deploy final pilot on App Service in rg-contoso-pilot after quota approval.</li>
+        <li>Parallel path: continue production-exploration validation on disposable Container Apps host in rg-dev.</li>
+        <li>Evidence path: keep pilot evidence log current with test outcomes, drills, and blocker updates.</li>
+      </ul>
+      <p class="stamp">Intent: maintain momentum now, preserve App Service parity target for final pilot readiness.</p>
+    </div>
+
+    <div class="card">
+      <h2>Readiness Snapshot (2026-06-09)</h2>
+      <ul>
+        <li>Done: branch isolation, startup/deploy alignment, Entra auth code path, disposable cloud lane, baseline smoke and prompt sweeps.</li>
+        <li>In progress: observability drills, security review sign-off, handoff package assembly, owner model maturation.</li>
+        <li>Blocked: final App Service deployment in target pilot subscription pending quota approval.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Today Wrap-Up (2026-06-05)</h2>
+      <ul>
+        <li>Submitted App Service quota request for target subscription/regions (East US 2 primary, East US fallback).</li>
+        <li>Provisioned a disposable validation lane in rg-dev using Azure Container Apps.</li>
+        <li>Enabled managed identity and granted Azure OpenAI RBAC for the disposable host.</li>
+        <li>Validated cloud endpoint health and executed a 10-prompt functional sweep (10/10 successful responses).</li>
+        <li>Captured operational evidence updates in the pilot evidence log.</li>
+      </ul>
+      <p class="stamp">Outcome: project is moving forward for production exploration while quota approval is pending.</p>
+    </div>
+
+    <div class="card">
+      <h2>This Week Focus (starting 2026-06-09)</h2>
+      <ul>
+        <li>Check quota ticket status first thing; escalate if there is no support update.</li>
+        <li>Run business-focused prompt validation on the disposable lane and log expected vs actual outcomes.</li>
+        <li>Create/verify alert rules and run at least one alert drill from the observability checklist.</li>
+        <li>Prepare immediate re-deploy command for rg-contoso-pilot so App Service deployment can run as soon as quota is approved.</li>
+        <li>Update tracker and evidence log with Monday verdict and next gate decision.</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Productionization Matrix</h2>
+      <p class="small">Operational tracker mapped to the 15 checklist sections. Populate owner names and evidence links during execution.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Area</th>
+            <th>Status</th>
+            <th>Owner</th>
+            <th>Top Blocker</th>
+            <th>Evidence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1. Executive Readiness</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>CSA (temporary owner)</td>
+            <td>Business owner and technical owner still need to be named before production handoff.</td>
+            <td>Decision captured: CSA-led startup phase</td>
+          </tr>
+          <tr>
+            <td>2. Teams App Package</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>Teams App Owner</td>
+            <td>Manifest validation and admin policy confirmation still pending.</td>
+            <td><a href="teams-app/manifest.json">teams-app/manifest.json</a></td>
+          </tr>
+          <tr>
+            <td>3. Identity and Access</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>Security + App Owner</td>
+            <td>Entra-auth path is now implemented; remaining gap is validating managed identity RBAC to Azure OpenAI in the target subscription.</td>
+            <td><a href="config/settings.py">config/settings.py</a>, <a href="infra/main.bicep">infra/main.bicep</a>, <a href="infra/modules/appservice/appservice.bicep">infra/modules/appservice/appservice.bicep</a>, <a href="runbooks/preprovision-design-notes.md">runbooks/preprovision-design-notes.md</a></td>
+          </tr>
+          <tr>
+            <td>4. Azure Bot and Messaging Endpoint</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>Bot Platform Owner</td>
+            <td>Need runtime verification for /api/messages in target environment.</td>
+            <td><a href="infra/modules/botservice/botservice.bicep">infra/modules/botservice/botservice.bicep</a>, <a href="main.py">main.py</a></td>
+          </tr>
+          <tr>
+            <td>5. App Service Configuration</td>
+            <td><span class="badge b-done">Core Aligned</span></td>
+            <td>Platform Engineer</td>
+            <td><strong>Active blocker:</strong> target subscription currently has zero App Service compute quota in East US and East US 2, preventing plan creation.</td>
+            <td><a href="azure-pipelines.yml">azure-pipelines.yml</a>, <a href="infra/modules/appservice/appservice.bicep">infra/modules/appservice/appservice.bicep</a>, <a href="startup.sh">startup.sh</a></td>
+          </tr>
+          <tr>
+            <td>6. Data Access and Hybrid SQL</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>Data Platform Owner</td>
+            <td>Production-shaped network and retry/timeout evidence not fully captured.</td>
+            <td><a href="data/loader.py">data/loader.py</a></td>
+          </tr>
+          <tr>
+            <td>7. Agent and Tool Behavior</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>AI App Owner</td>
+            <td>Adversarial and boundary test evidence not yet packaged.</td>
+            <td><a href="agent/kernel.py">agent/kernel.py</a>, <a href="scripts/run_test_bank.py">scripts/run_test_bank.py</a>, <a href="archive/TEST_BANK.md">archive/TEST_BANK.md</a></td>
+          </tr>
+          <tr>
+            <td>8. Conversation State and Files</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>App Owner</td>
+            <td>Scaled state storage decision not finalized for multi-instance operation.</td>
+            <td><a href="main.py">main.py</a>, <a href="static/index.html">static/index.html</a></td>
+          </tr>
+          <tr>
+            <td>9. Observability and Application Insights</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>SRE / Ops Owner</td>
+            <td>Definitions are documented; remaining gap is live alert-rule creation and validation drills.</td>
+            <td><a href="APP_INSIGHTS_GUIDE.md">APP_INSIGHTS_GUIDE.md</a>, <a href="main.py">main.py</a>, <a href="runbooks/observability-alerting-checklist.md">runbooks/observability-alerting-checklist.md</a></td>
+          </tr>
+          <tr>
+            <td>10. Security Review</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>Security Owner</td>
+            <td>Review meeting and sign-off evidence are still pending.</td>
+            <td><a href="runbooks/security-review-checklist.md">runbooks/security-review-checklist.md</a>, <a href="runbooks/preprovision-design-notes.md">runbooks/preprovision-design-notes.md</a></td>
+          </tr>
+          <tr>
+            <td>11. CI/CD and Deployment</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>DevOps Owner</td>
+            <td>Environment-specific promotion and approval model still to define.</td>
+            <td><a href="azure-pipelines.yml">azure-pipelines.yml</a>, <a href="infra/parameters.json">infra/parameters.json</a>, <a href="infra/parameters.staging.json">infra/parameters.staging.json</a>, <a href="infra/parameters.prod.json">infra/parameters.prod.json</a></td>
+          </tr>
+          <tr>
+            <td>12. Testing and Validation</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>QA / App Owner</td>
+            <td>End-to-end production smoke matrix not fully documented.</td>
+            <td><a href="tests/test_auth.py">tests/test_auth.py</a>, <a href="README.md">README.md</a>, <a href="screenshots/">screenshots/</a></td>
+          </tr>
+          <tr>
+            <td>13. Runbook and Operations</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>CSA (pilot primary owner)</td>
+            <td>Need validation drills and escalation routing confirmation with future SMEs.</td>
+            <td><a href="runbooks/README.md">runbooks/README.md</a>, <a href="runbooks/deploy-runbook.md">runbooks/deploy-runbook.md</a>, <a href="runbooks/rollback-runbook.md">runbooks/rollback-runbook.md</a>, <a href="runbooks/secret-rotation-runbook.md">runbooks/secret-rotation-runbook.md</a>, <a href="runbooks/teams-bot-troubleshooting-runbook.md">runbooks/teams-bot-troubleshooting-runbook.md</a>, <a href="runbooks/sql-connectivity-runbook.md">runbooks/sql-connectivity-runbook.md</a></td>
+          </tr>
+          <tr>
+            <td>14. Customer Handoff</td>
+            <td><span class="badge b-progress">In Progress</span></td>
+            <td>Delivery Owner</td>
+            <td>Handoff package and acceptance criteria not yet assembled.</td>
+            <td><a href="runbooks/day0-cutover-checklist.md">runbooks/day0-cutover-checklist.md</a>, <a href="runbooks/preprovision-design-notes.md">runbooks/preprovision-design-notes.md</a>, <a href="runbooks/pilot-evidence-log.md">runbooks/pilot-evidence-log.md</a></td>
+          </tr>
+          <tr>
+            <td>15. Go / No-Go Decision</td>
+            <td><span class="badge b-progress">Authority Assigned</span></td>
+            <td>CSA (final authority) + SME advisor input</td>
+            <td>Dependent on closure evidence from areas 1-14.</td>
+            <td>Decision captured: rollout target is Pilot; final authority is CSA with SME insight</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Current Verdict</h2>
+      <p><strong>Status:</strong> In Progress</p>
+      <p><strong>Top Blockers:</strong></p>
+      <ol>
+        <li>Business and technical ownership are temporary (CSA-led) until SMEs are onboarded.</li>
+        <li><strong>Active blocker:</strong> target subscription has zero App Service compute quota, so pilot App Service deployment cannot complete (quota request submitted, pending approval).</li>
+        <li>Live alert-rule creation, drill execution, and evidence capture are pending for pilot support handoff.</li>
+      </ol>
+      <p><strong>Recommended next action:</strong> execute functional validation and alert-drill evidence capture on the live disposable rg-dev lane, then re-run pilot deployment in rg-contoso-pilot immediately after quota approval.</p>
+      <p class="stamp">Last updated: 2026-06-09</p>
+    </div>
+
+    <div class="card">
+      <h2>Dependencies On You</h2>
+      <p class="small">Only decisions and approvals that cannot be inferred from code.</p>
+      <ul>
+        <li><strong>Captured:</strong> current owner is CSA (you), with Entra ID Identity SME and SRE/Ops SME to be onboarded afterwards.</li>
+        <li><strong>Captured:</strong> release intent is Pilot.</li>
+        <li><strong>Captured:</strong> use Contoso profile for current package metadata.</li>
+        <li><strong>Captured:</strong> support model is single-owner now, then split to 2-3 people.</li>
+        <li><strong>Captured:</strong> identity/security hardening changes are design-only in a separate stream.</li>
+        <li><strong>Captured:</strong> final go/no-go authority is CSA (you), with advisory input from another SME.</li>
+        <li><strong>Captured:</strong> rg-test is unrelated to this initiative; rg-dev is disposable and acceptable for disposable validation only.</li>
+      </ul>
+      <p class="stamp">If you provide these, the remaining items can be completed as implementation and documentation tasks.</p>
+    </div>
+
+    <div class="card">
+      <h2>Support Model Plan (Captured)</h2>
+      <ul>
+        <li><strong>Phase 1 (Pilot now):</strong> single primary owner (CSA-led) with lightweight operating coverage.</li>
+        <li><strong>Phase 2 (Near-term):</strong> split ownership to a 2-3 person team (Service/App owner, Entra ID Identity SME, SRE/Ops SME).</li>
+        <li><strong>Incident ownership:</strong> primary owner handles triage and communication; SMEs provide domain escalation support.</li>
+        <li><strong>Design stream:</strong> identity/security hardening (Key Vault + managed identity model) remains design-only in a separate workstream until implementation approval.</li>
+      </ul>
+      <p class="stamp">Decision recorded: 2026-06-05</p>
+    </div>
+  </div>
+</body>
+</html>
