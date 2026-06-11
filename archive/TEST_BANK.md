@@ -1,6 +1,6 @@
 # Chat Agent Test Bank
 
-> Generated from live database (ExtronDemo) on 2026-05-05.
+> Generated from live database on 2026-05-05.
 > Obsolescence_Results: 500 rows | CRmaster_ModelResults: 24 rows (10 overlap by PartNumber, 3 parts with multiple entries).
 > **Latest benchmark: 2026-05-05 | 31/31 PASS | Avg 5.3s | 0 failures**
 

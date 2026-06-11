@@ -118,7 +118,7 @@ requesting, and the connection silently fails.
 
 | Where | Setting | Example value |
 |-------|---------|---------------|
-| App Service env vars | `BASE_URL` | `https://fobsolescence-chat.extron.com` |
+| App Service env vars | `BASE_URL` | `https://<your-app-domain>.com` |
 | Local `.env` | `BASE_URL` | *(can be blank for local dev — falls back to relative)* |
 
 ---
