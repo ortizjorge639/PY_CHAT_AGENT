@@ -214,16 +214,32 @@ async def _initialize_components_loop(app: web.Application) -> None:
             await asyncio.sleep(retry_delay_seconds)
 
 
+async def _data_refresh_loop(app: web.Application) -> None:
+    """Periodically reload data from the configured source so queries reflect DB updates."""
+    interval = settings.data_refresh_interval_minutes
+    if interval <= 0:
+        return
+    delay = interval * 60
+    logger.info("Data auto-refresh enabled: every %d minute(s)", interval)
+    while True:
+        await asyncio.sleep(delay)
+        if _is_ready():
+            logger.info("Auto-refresh: reloading data...")
+            data_loader.reload()
+
+
 async def _on_startup(app: web.Application) -> None:
     app["init_task"] = asyncio.create_task(_initialize_components_loop(app))
+    app["refresh_task"] = asyncio.create_task(_data_refresh_loop(app))
 
 
 async def _on_cleanup(app: web.Application) -> None:
-    task = app.get("init_task")
-    if task:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+    for key in ("init_task", "refresh_task"):
+        task = app.get(key)
+        if task:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 async def _send_warmup_response(turn_context: TurnContext) -> None:
@@ -408,6 +424,20 @@ async def download_file(req: web.Request) -> web.Response:
     return web.FileResponse(filepath)
 
 
+# ── Data reload endpoint ──────────────────────────────
+async def reload_data(req: web.Request) -> web.Response:
+    """POST /api/reload — trigger a data refresh without restarting the app."""
+    if not _is_ready():
+        return web.json_response({"status": "error", "message": "App not ready yet"}, status=503)
+    data_loader.reload()
+    return web.json_response({
+        "status": "ok",
+        "tables": data_loader.list_tables(),
+        "rows_per_table": {t: len(data_loader._tables[t]) for t in data_loader.list_tables()},
+        "last_loaded_at": data_loader.last_loaded_at.isoformat() if data_loader.last_loaded_at else None,
+    })
+
+
 def main() -> None:
     """Start the aiohttp web server."""
     middlewares = []
@@ -421,6 +451,7 @@ def main() -> None:
     app.router.add_get("/", index_page)
     app.router.add_post("/api/messages", messages)
     app.router.add_post("/api/chat", chat_api)
+    app.router.add_post("/api/reload", reload_data)
     app.router.add_static("/static", STATIC_DIR)
     app.router.add_get("/api/files/{filename}", download_file)
     app.on_startup.append(_on_startup)

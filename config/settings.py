@@ -54,3 +54,4 @@ class Settings(BaseSettings):
 
     # General
     log_level: str = "INFO"
+    data_refresh_interval_minutes: int = 0  # 0 = disabled; >0 = auto-reload data on this interval
