@@ -2,6 +2,7 @@
 
 import logging
 import time
+from datetime import datetime, timezone
 from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
@@ -57,6 +58,7 @@ class DataLoader:
         self._table_roles: dict[str, str] = {}  # table_name → "primary" | "supplemental"
         self._is_loaded = False
         self._load_error: Exception | None = None
+        self._last_loaded_at: datetime | None = None
         if auto_load:
             self.load_now()
 
@@ -70,6 +72,11 @@ class DataLoader:
         """Most recent loading error, if any."""
         return self._load_error
 
+    @property
+    def last_loaded_at(self) -> datetime | None:
+        """UTC timestamp of the most recent successful data load."""
+        return self._last_loaded_at
+
     def load_now(self) -> None:
         """Load configured data source now. Safe to call multiple times."""
         if self._is_loaded:
@@ -78,9 +85,36 @@ class DataLoader:
             self._load()
             self._is_loaded = True
             self._load_error = None
+            self._last_loaded_at = datetime.now(timezone.utc)
         except Exception as exc:
             self._load_error = exc
             raise
+
+    def reload(self) -> None:
+        """Re-fetch data from the configured source, replacing in-memory tables.
+
+        On success, queries immediately reflect the latest data.
+        On failure, the previous data remains available and the error is logged.
+        """
+        logger.info("Data reload requested (last loaded: %s)", self._last_loaded_at)
+        old_tables = self._tables
+        old_roles = self._table_roles
+        self._tables = {}
+        self._table_roles = {}
+        self._is_loaded = False
+        try:
+            self._load()
+            self._is_loaded = True
+            self._load_error = None
+            self._last_loaded_at = datetime.now(timezone.utc)
+            logger.info("Data reload complete — %d table(s) refreshed", len(self._tables))
+        except Exception as exc:
+            # Roll back to previous data so the app keeps working
+            self._tables = old_tables
+            self._table_roles = old_roles
+            self._is_loaded = True
+            self._load_error = exc
+            logger.error("Data reload failed, keeping previous data: %s", exc, exc_info=True)
 
     # ── loaders ──────────────────────────────────────────
 
