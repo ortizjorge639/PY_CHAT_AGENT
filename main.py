@@ -226,6 +226,9 @@ async def _data_refresh_loop(app: web.Application) -> None:
         if _is_ready():
             logger.info("Auto-refresh: reloading data...")
             data_loader.reload()
+            if agent_kernel:
+                cleared = agent_kernel.reset_all_sessions()
+                logger.info("Auto-refresh: cleared %d conversation session(s)", cleared)
 
 
 async def _on_startup(app: web.Application) -> None:
@@ -430,11 +433,13 @@ async def reload_data(req: web.Request) -> web.Response:
     if not _is_ready():
         return web.json_response({"status": "error", "message": "App not ready yet"}, status=503)
     data_loader.reload()
+    sessions_cleared = agent_kernel.reset_all_sessions() if agent_kernel else 0
     return web.json_response({
         "status": "ok",
         "tables": data_loader.list_tables(),
         "rows_per_table": {t: len(data_loader._tables[t]) for t in data_loader.list_tables()},
         "last_loaded_at": data_loader.last_loaded_at.isoformat() if data_loader.last_loaded_at else None,
+        "sessions_cleared": sessions_cleared,
     })
 
 
