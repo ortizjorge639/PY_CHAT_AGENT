@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat-Over-Data Bot Documentation</title>
+    <style>
+        /* Reset & Base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", 
+                         "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+            overflow-x: hidden;
+        }
+
+        /* Layout */
+        .container {
+            display: flex;
+            gap: 0;
+            position: relative;
+            min-height: 100vh;
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            width: 240px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            background: #f9f9f9;
+            border-right: 1px solid #e5e5e5;
+            padding: 24px 0;
+            z-index: 100;
+        }
+
+        .sidebar h3 {
+            font-size: 13px;
+            font-weight: 600;
+            color: #666;
+            padding: 8px 16px;
+            margin: 12px 0 8px 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar a {
+            display: block;
+            padding: 8px 16px;
+            color: #0078D4;
+            text-decoration: none;
+            font-size: 14px;
+            border-left: 3px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .sidebar a:hover {
+            background: #f0f0f0;
+            border-left-color: #0078D4;
+            color: #005a9e;
+        }
+
+        .sidebar a.active {
+            background: #eef6fc;
+            border-left-color: #0078D4;
+            color: #0078D4;
+            font-weight: 500;
+        }
+
+        /* Main Content */
+        main {
+            flex: 1;
+            max-width: 820px;
+            padding: 40px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Header */
+        header {
+            margin-bottom: 48px;
+        }
+
+        .header-badge {
+            display: inline-block;
+            background: #f0f0f0;
+            color: #666;
+            padding: 4px 12px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-bottom: 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        h1 {
+            font-size: 42px;
+            font-weight: 600;
+            color: #0078D4;
+            margin-bottom: 12px;
+            line-height: 1.2;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 16px;
+            line-height: 1.4;
+        }
+
+        .metadata {
+            font-size: 13px;
+            color: #999;
+            border-top: 1px solid #e5e5e5;
+            padding-top: 16px;
+        }
+
+        /* Sections */
+        section {
+            margin-bottom: 56px;
+        }
+
+        section:not(:first-of-type) {
+            border-top: 1px solid #e5e5e5;
+            padding-top: 40px;
+        }
+
+        h2 {
+            font-size: 28px;
+            font-weight: 600;
+            color: #0078D4;
+            margin-bottom: 20px;
+            padding-top: 8px;
+        }
+
+        h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-top: 24px;
+            margin-bottom: 12px;
+        }
+
+        p {
+            margin-bottom: 16px;
+            line-height: 1.7;
+        }
+
+        /* Lists */
+        ul, ol {
+            margin-bottom: 16px;
+            margin-left: 24px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            line-height: 1.6;
+        }
+
+        /* Callout Boxes */
+        .callout {
+            margin: 20px 0;
+            padding: 16px 16px 16px 20px;
+            border-left: 4px solid;
+            background: #fafafa;
+            border-radius: 2px;
+            font-size: 15px;
+        }
+
+        .callout.info {
+            border-left-color: #0078D4;
+            background: #f0f6ff;
+        }
+
+        .callout.tip {
+            border-left-color: #107c10;
+            background: #f1f9f1;
+        }
+
+        .callout.warning {
+            border-left-color: #ffd700;
+            background: #fffbf0;
+        }
+
+        .callout strong {
+            color: #333;
+        }
+
+        .callout p {
+            margin: 0;
+        }
+
+        /* Code Blocks */
+        pre {
+            background: #f2f2f2;
+            border: 1px solid #e5e5e5;
+            border-radius: 4px;
+            padding: 16px;
+            overflow-x: auto;
+            margin: 16px 0;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        code {
+            font-family: "Courier New", monospace;
+            color: #333;
+        }
+
+        pre code {
+            color: #333;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 15px;
+        }
+
+        th {
+            background: #f2f2f2;
+            border: 1px solid #e5e5e5;
+            padding: 12px 14px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+        }
+
+        td {
+            border: 1px solid #e5e5e5;
+            padding: 12px 14px;
+            line-height: 1.5;
+        }
+
+        tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        /* Checkpoint Cards */
+        .checkpoint-card {
+            background: #f9f9f9;
+            border: 1px solid #e5e5e5;
+            border-radius: 4px;
+            padding: 24px;
+            margin: 16px 0;
+            border-left: 4px solid #0078D4;
+        }
+
+        .checkpoint-card h4 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #0078D4;
+            margin-bottom: 12px;
+        }
+
+        .checkpoint-card p {
+            margin-bottom: 12px;
+        }
+
+        .checkpoint-card ul {
+            margin-bottom: 12px;
+        }
+
+        .checkpoint-card .link-button {
+            display: inline-block;
+            color: #0078D4;
+            text-decoration: none;
+            font-weight: 500;
+            margin-top: 8px;
+        }
+
+        .checkpoint-card .link-button:hover {
+            text-decoration: underline;
+        }
+
+        /* Architecture Diagram */
+        .diagram {
+            background: #f9f9f9;
+            border: 1px solid #e5e5e5;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 20px 0;
+            font-family: "Courier New", monospace;
+            font-size: 13px;
+            line-height: 1.8;
+            overflow-x: auto;
+            white-space: pre;
+            color: #333;
+        }
+
+        /* Links */
+        a {
+            color: #0078D4;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Footer */
+        footer {
+            background: #f9f9f9;
+            border-top: 1px solid #e5e5e5;
+            padding: 32px 40px;
+            margin-top: 64px;
+            font-size: 13px;
+            color: #666;
+            margin-left: 240px;
+        }
+
+        footer a {
+            color: #0078D4;
+            margin-right: 20px;
+        }
+
+        footer p {
+            margin: 12px 0;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .sidebar {
+                width: 200px;
+            }
+
+            main {
+                padding: 32px 24px;
+            }
+
+            footer {
+                margin-left: 200px;
+                padding: 24px 20px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                position: relative;
+                width: 100%;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid #e5e5e5;
+                padding: 16px;
+            }
+
+            main {
+                padding: 24px 16px;
+                max-width: 100%;
+            }
+
+            footer {
+                margin-left: 0;
+            }
+
+            h1 {
+                font-size: 32px;
+            }
+
+            h2 {
+                font-size: 22px;
+            }
+        }
+
+        /* Utility */
+        .success {
+            color: #107c10;
+            font-weight: 500;
+        }
+
+        strong {
+            font-weight: 600;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <h3>On This Page</h3>
+            <a href="#overview" class="nav-link">Overview</a>
+            <a href="#architecture" class="nav-link">Architecture</a>
+            <a href="#tech-stack" class="nav-link">Tech Stack</a>
+            <a href="#capabilities" class="nav-link">Capabilities</a>
+            <a href="#getting-started" class="nav-link">Getting Started</a>
+            <a href="#security" class="nav-link">Security Model</a>
+            <a href="#project-structure" class="nav-link">Project Structure</a>
+            <a href="#environment-variables" class="nav-link">Environment Variables</a>
+            <a href="#scaling" class="nav-link">Scaling & Production</a>
+            <a href="#troubleshooting" class="nav-link">Troubleshooting</a>
+        </aside>
+
+        <!-- Main Content -->
+        <main>
+            <!-- Header -->
+            <header>
+                <div class="header-badge">v1.0 · Internal Accelerator</div>
+                <h1>Chat-Over-Data Bot</h1>
+                <p class="subtitle">Ask plain-English questions about your tabular data — directly inside Microsoft Teams or a built-in web UI.</p>
+                <div class="metadata">Last updated: June 9, 2026 · Author: Contoso Data Engineering</div>
+            </header>
+
+            <!-- Section 1: Overview -->
+            <section id="overview">
+                <h2>Overview</h2>
+                <p>The <strong>Chat-Over-Data Bot</strong> is a conversational interface that lets users query structured tabular data without writing code or opening a spreadsheet. Ask questions like <em>"How many parts have replacement intent?"</em> or <em>"Show me all rows where confidence is above 0.9"</em> and get instant, accurate answers.</p>
+
+                <h3>Who it's for</h3>
+                <ul>
+                    <li><strong>Data analysts</strong> — query data without SQL</li>
+                    <li><strong>Business users</strong> — explore insights in Teams</li>
+                    <li><strong>Engineers</strong> — deploy a no-code pattern in hours, not weeks</li>
+                    <li><strong>Stakeholders</strong> — understand data through conversation</li>
+                </ul>
+
+                <h3>Key value proposition</h3>
+                <ul>
+                    <li>No code to write — just ask a question</li>
+                    <li>Works inside Teams and in a browser</li>
+                    <li>Secure by design — LLM never sees raw data</li>
+                    <li>Deploy in hours — standard Azure infrastructure</li>
+                    <li>Swappable data layer — Excel or SQL Server, no code changes</li>
+                </ul>
+
+                <div class="callout tip">
+                    <p><strong>Tip:</strong> The bot routes natural-language questions to typed Python functions. The LLM decides <em>which</em> function to call based on the question; it never directly queries your data. This keeps your data safe and costs low.</p>
+                </div>
+            </section>
+
+            <!-- Section 2: Architecture -->
+            <section id="architecture">
+                <h2>Architecture</h2>
+                <p>The bot processes user questions through a multi-layer pipeline: user input → Bot Framework → Microsoft Agent Framework → LLM decision-making → typed data tools → data layer → formatted response.</p>
+
+                <h3>Request flow</h3>
+                <div class="diagram">User (Teams or Web UI)
+  │  "How many comments have replacement intent?"
+  ▼
+Bot Framework adapter (aiohttp, port 3978)
+  ▼
+Microsoft Agent Framework ──► LLM (GPT-4.1 mini) decides which tool to call
+  ▼
+Data tools (count_rows, query_table, group_by, list_all, …)
+  ▼
+Data layer (Excel or SQL Server)
+  ▼
+Formatted answer returned to user
+  "22 out of 25 comments have replacement_intent = 1."</div>
+
+                <h3>Design principles</h3>
+                <ul>
+                    <li><strong>LLM never sees raw data</strong> — The LLM only sees function signatures and must decide which function to call. It never reads table contents directly. This protects your data and reduces token costs.</li>
+                    <li><strong>Mini model by design</strong> — The bot's job is tool routing, not complex reasoning. GPT-4.1 mini is cheaper, faster, and equally accurate for this workload. You're paying for function selection, not reasoning.</li>
+                    <li><strong>Swappable data layer</strong> — Switch between Excel and SQL Server with a single environment variable change. No code modifications required.</li>
+                </ul>
+
+                <div class="callout info">
+                    <p><strong>How tool calling works:</strong> The LLM receives a structured description of available functions (their names, parameters, descriptions). It analyzes the user's question and responds with the function name and arguments it wants to execute. The bot calls that function, gets the result, and asks the LLM to compose a human-readable response.</p>
+                </div>
+            </section>
+
+            <!-- Section 3: Tech Stack -->
+            <section id="tech-stack">
+                <h2>Tech Stack</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Component</th>
+                            <th>Technology</th>
+                            <th>Why</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Runtime</td>
+                            <td>Python 3.11 + aiohttp</td>
+                            <td>Fast, async-first, lightweight HTTP server</td>
+                        </tr>
+                        <tr>
+                            <td>Bot Framework</td>
+                            <td>Bot Framework SDK (Python)</td>
+                            <td>Standard connector for Teams and Web Chat</td>
+                        </tr>
+                        <tr>
+                            <td>Agent Framework</td>
+                            <td>Microsoft Agent Framework</td>
+                            <td>Built-in tool calling and function orchestration</td>
+                        </tr>
+                        <tr>
+                            <td>LLM</td>
+                            <td>Azure OpenAI (GPT-4.1 mini)</td>
+                            <td>Tool calling support, cost-efficient, managed service</td>
+                        </tr>
+                        <tr>
+                            <td>Data Layer</td>
+                            <td>Excel (openpyxl) or SQL Server (pyodbc)</td>
+                            <td>No infrastructure; easily switchable via env vars</td>
+                        </tr>
+                        <tr>
+                            <td>Hosting</td>
+                            <td>Azure App Service (Linux)</td>
+                            <td>Managed, scalable, integrated with Teams</td>
+                        </tr>
+                        <tr>
+                            <td>Authentication</td>
+                            <td>Entra ID + Easy Auth</td>
+                            <td>No code needed; built into App Service</td>
+                        </tr>
+                        <tr>
+                            <td>Observability</td>
+                            <td>Azure Monitor + OpenTelemetry</td>
+                            <td>Auto-track requests, dependencies, errors</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Section 4: Capabilities -->
+            <section id="capabilities">
+                <h2>Capabilities</h2>
+                <p>The bot understands these query patterns and translates them to function calls:</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Capability</th>
+                            <th>Example Question</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Exact counts</td>
+                            <td>"How many rows are there?"</td>
+                        </tr>
+                        <tr>
+                            <td>Full record lists</td>
+                            <td>"Show me all rows"</td>
+                        </tr>
+                        <tr>
+                            <td>Column filters</td>
+                            <td>"Show rows where confidence is above 0.9"</td>
+                        </tr>
+                        <tr>
+                            <td>Group & summarize</td>
+                            <td>"How many comments have replacement_intent = 1?"</td>
+                        </tr>
+                        <tr>
+                            <td>Distinct values</td>
+                            <td>"What are the unique values in the status column?"</td>
+                        </tr>
+                        <tr>
+                            <td>Chunked output + download</td>
+                            <td>"Export the results as a CSV"</td>
+                        </tr>
+                        <tr>
+                            <td>Follow-up context</td>
+                            <td>"Now filter that to just the high-priority ones" (uses prior results)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Section 5: Getting Started -->
+            <section id="getting-started">
+                <h2>Getting Started — Checkpoint Walkthrough</h2>
+                <p>The bot deployment is structured as <strong>four checkpoints</strong>. Each is a save point — don't move on until the current one works end-to-end. This keeps the learning curve flat and troubleshooting focused.</p>
+
+                <!-- Checkpoint 0 -->
+                <div class="checkpoint-card">
+                    <h4>Checkpoint 0: Azure Resources</h4>
+                    <p><strong>Goal:</strong> Verify you have an Azure OpenAI resource with a tool-calling model deployed.</p>
+                    <p><strong>Prerequisites:</strong></p>
+                    <ul>
+                        <li>Azure subscription with permission to create resources</li>
+                        <li>Azure OpenAI instance (reuse from a prior project if available)</li>
+                    </ul>
+                    <p><strong>Key steps:</strong></p>
+                    <ul>
+                        <li>Open Azure Portal → Azure OpenAI resource → Keys and Endpoint</li>
+                        <li>Copy the endpoint URL, API key, and deployment name (e.g., <code>gpt-5-mini</code>)</li>
+                        <li>Keep these values handy for Checkpoint 1</li>
+                    </ul>
+                    <p><strong>Status:</strong> <span class="success">✓ Prerequisite</span></p>
+                </div>
+
+                <!-- Checkpoint 1 -->
+                <div class="checkpoint-card">
+                    <h4>Checkpoint 1: Local Web UI</h4>
+                    <p><strong>Goal:</strong> Bot answers questions in a browser on your machine.</p>
+                    <p><strong>Prerequisites:</strong></p>
+                    <ul>
+                        <li>Checkpoint 0 complete</li>
+                        <li>Python 3.11 installed</li>
+                        <li>Azure OpenAI credentials from Checkpoint 0</li>
+                    </ul>
+                    <p><strong>Key steps:</strong></p>
+                    <ul>
+                        <li>Clone the repo and create a Python virtual environment</li>
+                        <li>Copy <code>.env.example</code> to <code>.env</code> and fill in Azure OpenAI credentials</li>
+                        <li>Set <code>DATASOURCE=excel</code> (default; requires no extra setup)</li>
+                        <li>Run <code>pip install -r requirements.txt</code> then <code>python main.py</code></li>
+                        <li>Open <code>http://localhost:3978</code> and ask: "How many rows are there?"</li>
+                    </ul>
+                    <p><a href="#" class="link-button">See full guide in README →</a></p>
+                </div>
+
+                <!-- Checkpoint 2 -->
+                <div class="checkpoint-card">
+                    <h4>Checkpoint 2: Deploy to Azure</h4>
+                    <p><strong>Goal:</strong> Bot runs in Azure App Service; responds through Azure Bot Service.</p>
+                    <p><strong>Prerequisites:</strong></p>
+                    <ul>
+                        <li>Checkpoint 1 complete</li>
+                        <li>Azure subscription with sufficient permissions</li>
+                        <li>Azure CLI installed</li>
+                    </ul>
+                    <p><strong>Key steps:</strong></p>
+                    <ul>
+                        <li>Register an app in Entra ID and capture its client ID and secret</li>
+                        <li>Create Azure Bot Service and App Service (Linux, Python 3.11)</li>
+                        <li>Configure App Service environment variables with Azure OpenAI and Bot credentials</li>
+                        <li>Create a zip file and deploy with <code>az webapp deployment source config-zip</code></li>
+                        <li>Point Bot Service messaging endpoint to your App Service URL</li>
+                        <li>Test using Bot Service's "Test in Web Chat" feature</li>
+                    </ul>
+                    <p><a href="#" class="link-button">See full deployment guide in README →</a></p>
+                </div>
+
+                <!-- Checkpoint 3 -->
+                <div class="checkpoint-card">
+                    <h4>Checkpoint 3: Teams Integration</h4>
+                    <p><strong>Goal:</strong> Bot is usable inside Microsoft Teams.</p>
+                    <p><strong>Prerequisites:</strong></p>
+                    <ul>
+                        <li>Checkpoint 2 complete</li>
+                        <li>Teams tenant with custom app sideloading enabled</li>
+                    </ul>
+                    <p><strong>Key steps:</strong></p>
+                    <ul>
+                        <li>Update <code>teams-app/manifest.json</code> with your Entra ID app ID</li>
+                        <li>Create a zip containing <code>manifest.json</code>, <code>outline.png</code>, <code>color.png</code></li>
+                        <li>Upload the zip to Teams → Apps → Manage your apps → Upload custom app</li>
+                        <li>Add the bot to your chat and ask a question</li>
+                    </ul>
+                    <p><a href="#" class="link-button">See Teams setup guide in README →</a></p>
+                </div>
+
+                <!-- Checkpoint 4 -->
+                <div class="checkpoint-card">
+                    <h4>Checkpoint 4: Secure Access</h4>
+                    <p><strong>Goal:</strong> Web app is accessible only to approved users; network access is restricted.</p>
+                    <p><strong>Prerequisites:</strong></p>
+                    <ul>
+                        <li>Checkpoint 2 complete</li>
+                        <li>Coordination with infrastructure team for network setup</li>
+                    </ul>
+                    <p><strong>Key steps:</strong></p>
+                    <ul>
+                        <li>Configure network restrictions (App Gateway, access restrictions, or private endpoint)</li>
+                        <li>Enable Entra ID authentication (Easy Auth) on App Service</li>
+                        <li>Exclude <code>/api/messages</code> from Easy Auth so Bot Service can reach the endpoint</li>
+                        <li>Set environment variable <code>REQUIRE_AUTH=true</code> for defense-in-depth</li>
+                        <li>Verify authentication works by opening web UI in a private browser window</li>
+                    </ul>
+                    <p><a href="#" class="link-button">See security setup guide in README →</a></p>
+                </div>
+            </section>
+
+            <!-- Section 6: Security Model -->
+            <section id="security">
+                <h2>Security Model</h2>
+                <p>The bot implements <strong>defense-in-depth</strong> across four layers:</p>
+
+                <h3>Four-layer security stack</h3>
+                <ol>
+                    <li><strong>Network restrictions</strong> — App Gateway, access restrictions, or private endpoint limit which IPs can reach the App Service</li>
+                    <li><strong>Entra ID authentication</strong> — Easy Auth requires users to sign in with their organizational account</li>
+                    <li><strong>User/group assignment</strong> — Only approved users are granted access (enforced at the app level)</li>
+                    <li><strong>Download gating</strong> — File exports require membership in a designated security group</li>
+                </ol>
+
+                <h3>Network approach comparison</h3>
+                <p>Choose one based on your infrastructure requirements:</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Approach</th>
+                            <th>How it works</th>
+                            <th>Teams compatible?</th>
+                            <th>Effort</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Application Gateway</strong></td>
+                            <td>Private App Service behind a gateway; gateway accepts Bot Service traffic</td>
+                            <td>✓ Yes</td>
+                            <td>High</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Access restrictions</strong></td>
+                            <td>Public endpoint; allowlist <code>AzureBotService</code> tag + VPN range; deny all else</td>
+                            <td>✓ Yes</td>
+                            <td>Low</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Private endpoint only</strong></td>
+                            <td>No public access; only reachable from within the VNet</td>
+                            <td>✗ No</td>
+                            <td>High</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="callout warning">
+                    <p><strong>Important:</strong> Teams integrations require inbound access from Microsoft's cloud infrastructure. A fully private endpoint (no public access) will block Teams and "Test in Web Chat" functionality. Work with your infrastructure team to choose an approach that balances security with Teams connectivity.</p>
+                </div>
+
+                <h3>Defense-in-depth principle</h3>
+                <div class="callout tip">
+                    <p><strong>Tip:</strong> The bot implements an app-level <code>REQUIRE_AUTH</code> flag that rejects unauthenticated requests even if Easy Auth is misconfigured. This acts as a safety net — if the authentication layer is accidentally disabled, the bot still enforces access control.</p>
+                </div>
+            </section>
+
+            <!-- Section 7: Project Structure -->
+            <section id="project-structure">
+                <h2>Project Structure</h2>
+                <pre>chat-over-data-bot/
+├── agent/                      # Agent Framework integration
+│   ├── kernel.py              # Main LLM kernel and tool definitions
+│   └── plugins/               # Extensible data tools
+│       ├── data_plugin.py     # Excel data loader and query tools
+│       └── data_plugin_customer.py  # Example SQL data plugin
+├── bot/                        # Bot Framework adapter
+│   ├── bot_handler.py         # Incoming message routing
+│   └── conversation_freshness_skill.py  # Context management
+├── config/                     # Configuration (via pydantic-settings)
+│   └── settings.py            # All env var bindings
+├── data/                       # Data files (development)
+│   ├── mock/                  # .xlsx files for local testing
+│   └── loader.py              # Data loading abstraction
+├── infra/                      # Infrastructure as Code (Bicep)
+│   ├── main.bicep             # Orchestrator template
+│   └── modules/               # Resource definitions
+│       ├── appservice/        # App Service + deployment slots
+│       ├── botservice/        # Azure Bot Service
+│       └── openai/            # Azure OpenAI integration
+├── static/                     # Web UI frontend
+│   └── index.html             # Chat interface
+├── teams-app/                  # Teams app manifest
+│   ├── manifest.json          # Teams app definition
+│   ├── outline.png            # 32×32 icon
+│   └── color.png              # 192×192 icon
+├── scripts/                    # Utility scripts
+│   ├── run_benchmark.py       # Performance testing
+│   └── helpers/               # Test helpers
+├── main.py                     # Application entry point
+├── requirements.txt            # Python dependencies
+├── .env.example               # Template configuration
+├── Dockerfile                 # Container image
+└── README.md                  # Full deployment guide</pre>
+            </section>
+
+            <!-- Section 8: Environment Variables -->
+            <section id="environment-variables">
+                <h2>Environment Variables</h2>
+                <p>All configuration is driven by environment variables (loaded from <code>.env</code> file locally or App Service settings in Azure).</p>
+
+                <h3>Azure OpenAI</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Required</th>
+                            <th>Default</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>AZURE_OPENAI_ENDPOINT</code></td>
+                            <td>Yes</td>
+                            <td>—</td>
+                            <td>Azure OpenAI resource endpoint URL (e.g., <code>https://your-resource.openai.azure.com/</code>)</td>
+                        </tr>
+                        <tr>
+                            <td><code>AZURE_OPENAI_API_KEY</code></td>
+                            <td>Yes</td>
+                            <td>—</td>
+                            <td>Azure OpenAI API key</td>
+                        </tr>
+                        <tr>
+                            <td><code>AZURE_OPENAI_DEPLOYMENT_NAME</code></td>
+                            <td>Yes</td>
+                            <td><code>gpt-4.1-mini</code></td>
+                            <td>Deployment name for your model (e.g., <code>gpt-4.1-mini</code>)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Data Source — Excel</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Required</th>
+                            <th>Default</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>DATASOURCE</code></td>
+                            <td>Yes</td>
+                            <td><code>excel</code></td>
+                            <td>Set to <code>excel</code> to use Excel files</td>
+                        </tr>
+                        <tr>
+                            <td><code>EXCEL_FOLDER_PATH</code></td>
+                            <td>No</td>
+                            <td><code>./data/mock</code></td>
+                            <td>Path to folder containing .xlsx files</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Data Source — SQL Server</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Required</th>
+                            <th>Default</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>DATASOURCE</code></td>
+                            <td>Yes (for SQL)</td>
+                            <td>—</td>
+                            <td>Set to <code>sql</code> to use SQL Server</td>
+                        </tr>
+                        <tr>
+                            <td><code>SQL_SERVER</code></td>
+                            <td>Yes (for SQL)</td>
+                            <td>—</td>
+                            <td>SQL Server hostname or IP</td>
+                        </tr>
+                        <tr>
+                            <td><code>SQL_PORT</code></td>
+                            <td>No</td>
+                            <td><code>1433</code></td>
+                            <td>SQL Server port</td>
+                        </tr>
+                        <tr>
+                            <td><code>SQL_DATABASE</code></td>
+                            <td>Yes (for SQL)</td>
+                            <td>—</td>
+                            <td>Database name</td>
+                        </tr>
+                        <tr>
+                            <td><code>SQL_TABLE</code></td>
+                            <td>No</td>
+                            <td>—</td>
+                            <td>Single table name (legacy; use <code>SQL_TABLES</code> for multiple)</td>
+                        </tr>
+                        <tr>
+                            <td><code>SQL_TABLES</code></td>
+                            <td>No</td>
+                            <td>—</td>
+                            <td>Comma-separated list of table names</td>
+                        </tr>
+                        <tr>
+                            <td><code>SQL_TRUSTED_CONNECTION</code></td>
+                            <td>No</td>
+                            <td><code>no</code></td>
+                            <td>Set to <code>yes</code> for Windows authentication</td>
+                        </tr>
+                        <tr>
+                            <td><code>SQL_USERNAME</code></td>
+                            <td>No</td>
+                            <td>—</td>
+                            <td>SQL username (if not using Windows auth)</td>
+                        </tr>
+                        <tr>
+                            <td><code>SQL_PASSWORD</code></td>
+                            <td>No</td>
+                            <td>—</td>
+                            <td>SQL password (if not using Windows auth)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Bot Framework &amp; Teams</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Required</th>
+                            <th>Default</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>MICROSOFT_APP_ID</code></td>
+                            <td>For Teams/Deploy</td>
+                            <td>—</td>
+                            <td>Entra ID app registration client ID</td>
+                        </tr>
+                        <tr>
+                            <td><code>MICROSOFT_APP_PASSWORD</code></td>
+                            <td>For Teams/Deploy</td>
+                            <td>—</td>
+                            <td>Entra ID app registration client secret</td>
+                        </tr>
+                        <tr>
+                            <td><code>MICROSOFT_APP_TENANT_ID</code></td>
+                            <td>For Teams/Deploy</td>
+                            <td>—</td>
+                            <td>Entra ID tenant ID (directory ID)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Security</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Required</th>
+                            <th>Default</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>REQUIRE_AUTH</code></td>
+                            <td>No</td>
+                            <td><code>false</code></td>
+                            <td>Set to <code>true</code> to enforce app-level authentication (defense-in-depth)</td>
+                        </tr>
+                        <tr>
+                            <td><code>FILE_DOWNLOAD_GROUP_ID</code></td>
+                            <td>No</td>
+                            <td>—</td>
+                            <td>Entra ID security group ID; only members can download files</td>
+                        </tr>
+                        <tr>
+                            <td><code>APPLICATIONINSIGHTS_CONNECTION_STRING</code></td>
+                            <td>No</td>
+                            <td>—</td>
+                            <td>Application Insights connection string for telemetry</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Server</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Required</th>
+                            <th>Default</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>BOT_PORT</code></td>
+                            <td>No</td>
+                            <td><code>3978</code></td>
+                            <td>HTTP port the bot listens on</td>
+                        </tr>
+                        <tr>
+                            <td><code>SCM_DO_BUILD_DURING_DEPLOYMENT</code></td>
+                            <td>For Azure Deploy</td>
+                            <td><code>1</code></td>
+                            <td>Tells Oryx to run <code>pip install</code> during deployment</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- Section 9: Scaling & Production Readiness -->
+            <section id="scaling">
+                <h2>Scaling &amp; Production Readiness</h2>
+                <p>The bot is designed to scale. For higher traffic, consider these changes:</p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Change</th>
+                            <th>What to do</th>
+                            <th>Why</th>
+                            <th>Effort</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Session persistence</strong></td>
+                            <td>Add Azure Cache for Redis; update session storage in <code>bot_handler.py</code></td>
+                            <td>In-memory sessions don't survive App Service restarts or scale-outs</td>
+                            <td>Medium</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Hosting tier</strong></td>
+                            <td>Upgrade from B1 (Basic) to P1v2 (Premium) App Service Plan</td>
+                            <td>Higher throughput, auto-scaling, deployment slots</td>
+                            <td>Low</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Container hosting</strong></td>
+                            <td>Migrate to Azure Container Apps or AKS; build and push Docker image</td>
+                            <td>Finer-grained scaling, multi-region deployment, GitOps</td>
+                            <td>High</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Data layer optimization</strong></td>
+                            <td>Add indexes to SQL tables; cache frequently queried datasets</td>
+                            <td>Reduce query latency for large datasets</td>
+                            <td>Low–Medium</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="callout info">
+                    <p><strong>Important:</strong> The bot code doesn't change when you scale. You're only changing infrastructure — App Service plan, hosting model, or caching layer. The core logic, data layer, and Agent Framework integration remain the same.</p>
+                </div>
+            </section>
+
+            <!-- Section 10: Troubleshooting -->
+            <section id="troubleshooting">
+                <h2>Troubleshooting</h2>
+                <p>Common issues and their fixes:</p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Symptom</th>
+                            <th>Likely Cause</th>
+                            <th>Fix</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>"Test in Web Chat" — no response, no errors</td>
+                            <td>Messaging endpoint wrong or behind App Gateway</td>
+                            <td>Verify URL ends with <code>/api/messages</code>; if behind gateway, use gateway URL — not the App Service URL</td>
+                        </tr>
+                        <tr>
+                            <td><code>403 Forbidden</code> on App Service URL</td>
+                            <td>App Service behind App Gateway / APIM</td>
+                            <td>Use the gateway's public URL instead; direct access is blocked</td>
+                        </tr>
+                        <tr>
+                            <td><code>Unauthorized</code> errors in Bot Service</td>
+                            <td>App ID / password / tenant ID mismatch</td>
+                            <td>Double-check all three values match between Entra, Bot Service, and App Service env vars</td>
+                        </tr>
+                        <tr>
+                            <td>"Test in Web Chat" — <code>HTTP status code Unauthorized</code></td>
+                            <td>Easy Auth blocking <code>/api/messages</code></td>
+                            <td>Add <code>/api/messages</code> to Easy Auth excluded paths using the included <code>fix_easyauth_bot.ps1</code> script</td>
+                        </tr>
+                        <tr>
+                            <td><code>missing service principal</code> error</td>
+                            <td>App Registration has no service principal</td>
+                            <td>Azure Portal → Entra ID → Enterprise applications → search your app. If missing, create one via <code>az ad sp create --id &lt;APP_ID&gt;</code></td>
+                        </tr>
+                        <tr>
+                            <td>App Service returns 5xx errors</td>
+                            <td>Startup command not set or dependencies missing</td>
+                            <td>Check App Service → Log stream; verify startup command is <code>antenv/bin/python main.py</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>ModuleNotFoundError</code> for local packages</td>
+                            <td>Windows backslash paths in zip **or** Oryx extraction issue</td>
+                            <td>Re-zip using the Python <code>zipfile</code> script (Step 5 in README); ensure <code>sys.path.insert</code> is in <code>main.py</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>Could not find requirements.txt</code> in build log</td>
+                            <td>Zip structure wrong — <code>requirements.txt</code> nested in subfolder</td>
+                            <td>Re-zip from inside the project folder, not its parent</td>
+                        </tr>
+                        <tr>
+                            <td>Build finishes in <60 seconds</td>
+                            <td>Oryx skipped <code>pip install</code></td>
+                            <td>Verify <code>SCM_DO_BUILD_DURING_DEPLOYMENT=1</code> is set; use <code>config-zip</code> (not <code>deploy --type zip</code>)</td>
+                        </tr>
+                        <tr>
+                            <td><code>unexpected keyword argument 'tool_choice'</code></td>
+                            <td>Agent Framework version mismatch</td>
+                            <td>Pin exact versions in <code>requirements.txt</code> to match bundled wheels; redeploy</td>
+                        </tr>
+                        <tr>
+                            <td>Teams upload — <code>Manifest parsing error</code></td>
+                            <td>Placeholder app ID in <code>manifest.json</code></td>
+                            <td>Replace both instances of <code>&lt;your-app-id-from-entra&gt;</code> with the actual Application (client) ID</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="callout tip">
+                    <p><strong>Need more help?</strong> Check the full README for detailed deployment walkthroughs, step-by-step screenshots, and deep-dive troubleshooting. The GitHub repository also includes diagnostic scripts in the <code>scripts/</code> folder.</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <p>
+            <a href="#">GitHub Repository</a>
+            <a href="#">Full Deployment Guide</a>
+            <a href="#">Microsoft Agent Framework Docs</a>
+        </p>
+        <p><strong>Internal Use Only</strong> · This documentation describes Contoso's Chat-Over-Data Bot accelerator. For questions or contributions, contact the Data Engineering team.</p>
+        <p>Last updated: June 9, 2026 | Version 1.0</p>
+    </footer>
+
+    <script>
+        // Scroll-spy: highlight current section in sidebar
+        const links = document.querySelectorAll('.sidebar .nav-link');
+        const sections = document.querySelectorAll('main section');
+
+        function updateActiveLink() {
+            let currentSection = '';
+
+            sections.forEach((section) => {
+                const sectionTop = section.offsetTop;
+                const sectionHeight = section.clientHeight;
+                if (window.scrollY >= sectionTop - 100) {
+                    currentSection = section.getAttribute('id');
+                }
+            });
+
+            links.forEach((link) => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === `#${currentSection}`) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        window.addEventListener('scroll', updateActiveLink);
+        updateActiveLink(); // Initial call
+    </script>
+</body>
+</html>

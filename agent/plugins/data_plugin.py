@@ -1,9 +1,11 @@
 """
 Data access tools for the Microsoft Agent Framework.
+
 TOOLS ARE STRICTLY NON-CONVERSATIONAL.
 - Tools NEVER ask questions.
 - Tools NEVER offer options.
 - Tools ONLY return data or neutral status signals.
+
 UX DECISIONS (lists, Excel, follow-ups) are owned by the kernel.
 """
 
@@ -12,18 +14,23 @@ import logging
 import os
 from typing import Annotated, Callable, List, Optional
 from uuid import uuid4
+
 import pandas as pd
 from pydantic import Field
+
 from data.loader import DataLoader, CHUNK_SIZE
+
 logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------
 # Configuration
 # -------------------------------------------------------------------
+
 GENERATED_DIR = os.environ.get(
     "GENERATED_DIR",
     os.path.join(os.path.dirname(__file__), "..", "..", "generated"),
 )
+
 VALID_STATUS_VALUES = {
     "NOT eligible for scrap - Bin Location-[SHOW]",
     "Component Request - Please review Logid",
@@ -42,6 +49,20 @@ VALID_STATUS_VALUES = {
     "NOT eligible for scrap - International Powercord",
 }
 
+REZA_LIST_COLUMNS = [
+    "PartNumber",
+    "P/C Phase",
+    "DateAdded",
+    "QOH",
+    "Obsolete Reserve$",
+]
+
+SCRAP_LIST_COLUMNS = [
+    "PartNumber",
+    "Status",
+    "Processed_Date",
+]
+
 # -------------------------------------------------------------------
 # Helper functions
 # -------------------------------------------------------------------
@@ -51,18 +72,21 @@ def _rows_to_chunks(rows: List[dict], columns: List[str]) -> List[str]:
     Convert rows to markdown tables with chunking.
     Tools do NOT decide whether chunks are shown — kernel decides.
     """
-
     if not rows:
         return []
+
     chunks: List[str] = []
     total = len(rows)
+
     for i in range(0, total, CHUNK_SIZE):
         df = pd.DataFrame(rows[i : i + CHUNK_SIZE])
         df = df.reindex(columns=columns)
         df = df.where(pd.notna(df), "")
         header = f"**Rows {i + 1}–{min(i + CHUNK_SIZE, total)} of {total}**\n\n"
         chunks.append(header + df.to_markdown(index=False))
+
     return chunks
+
 
 def _validate_status_filter(
     filter_column: Optional[str],
@@ -79,6 +103,7 @@ def _validate_status_filter(
         )
     return None
 
+
 def _store_last_result(
     last_result: dict,
     table_name: str,
@@ -89,7 +114,6 @@ def _store_last_result(
     Persist last query result for Excel export ONLY.
     Table name remains internal and is never exposed to the user.
     """
-
     last_result.clear()
     last_result.update(
         {
@@ -98,6 +122,83 @@ def _store_last_result(
             "columns": columns,
         }
     )
+
+
+def _is_reza_list_filter(
+    filter_column: Optional[str],
+    filter_value: Optional[str],
+) -> bool:
+    return (
+        filter_column == "Reza's List"
+        and str(filter_value).strip() in {"1", "1.0", "True", "true"}
+    )
+
+
+def _is_scrap_list_filter(
+    filter_column: Optional[str],
+    filter_value: Optional[str],
+) -> bool:
+    return (
+        filter_column == "Status"
+        and filter_value == "May be eligible to be scrapped"
+    )
+
+
+def _project_rows_and_columns(
+    rows: List[dict],
+    columns: List[str],
+    filter_column: Optional[str] = None,
+    filter_value: Optional[str] = None,
+    query_expr: Optional[str] = None,
+) -> tuple[List[dict], List[str]]:
+    """
+    Apply only the special column projections that are required.
+
+    Reza's list:
+      filter_column = "Reza's List"
+      filter_value = 1
+
+    Scrap list:
+      filter_column = "Status"
+      filter_value = "May be eligible to be scrapped"
+
+    Everything else remains unchanged.
+    """
+    if not rows:
+        return rows, columns
+
+    if _is_reza_list_filter(filter_column, filter_value):
+        projected_rows = [
+            {col: row.get(col) for col in REZA_LIST_COLUMNS}
+            for row in rows
+        ]
+        return projected_rows, REZA_LIST_COLUMNS
+
+    if _is_scrap_list_filter(filter_column, filter_value):
+        projected_rows = [
+            {col: row.get(col) for col in SCRAP_LIST_COLUMNS}
+            for row in rows
+        ]
+        return projected_rows, SCRAP_LIST_COLUMNS
+
+    if query_expr:
+        expr_lower = query_expr.lower()
+
+        if "reza" in expr_lower and "list" in expr_lower:
+            projected_rows = [
+                {col: row.get(col) for col in REZA_LIST_COLUMNS}
+                for row in rows
+            ]
+            return projected_rows, REZA_LIST_COLUMNS
+
+        if "may be eligible to be scrapped" in expr_lower:
+            projected_rows = [
+                {col: row.get(col) for col in SCRAP_LIST_COLUMNS}
+                for row in rows
+            ]
+            return projected_rows, SCRAP_LIST_COLUMNS
+
+    return rows, columns
 
 # -------------------------------------------------------------------
 # Tool factory
@@ -112,10 +213,12 @@ def create_data_tools(
 ) -> List[Callable[..., str]]:
     """
     Factory returning STRICT, SQL-backed data tools.
+
     Tools:
     - Execute queries
     - Store results
     - Return neutral machine-safe signals
+
     Tools DO NOT:
     - Ask questions
     - Offer choices
@@ -148,12 +251,10 @@ def create_data_tools(
         if error:
             return error
 
+        # ✅ Table name deliberately omitted
         return json.dumps(
             {
-                "table": table_name,
                 "count": loader.count_rows(table_name, fc, fv),
-                "filter_column": fc,
-                "filter_value": fv,
             },
             indent=2,
         )
@@ -167,11 +268,11 @@ def create_data_tools(
         Retrieve rows.
         Tool NEVER decides how results are presented.
         """
-
         fc, fv = filter_column or None, filter_value or None
         error = _validate_status_filter(fc, fv)
         if error:
             return error
+
         result = loader.get_rows(table_name, fc, fv)
 
         # ✅ Case-insensitive EXACT PartNumber match
@@ -183,30 +284,33 @@ def create_data_tools(
                 if str(row.get("PartNumber", "")).upper() == requested
             ]
             result["total"] = len(result["rows"])
+
         if result["total"] == 0:
             return "No rows matched."
+
+        projected_rows, projected_columns = _project_rows_and_columns(
+            rows=result["rows"],
+            columns=result["columns"],
+            filter_column=fc,
+            filter_value=fv,
+        )
+
         _store_last_result(
             last_result,
             table_name,
-            result["rows"],
-            result["columns"],
+            projected_rows,
+            projected_columns,
         )
+
         data_buffer.extend(
-            _rows_to_chunks(result["rows"], result["columns"])
+            _rows_to_chunks(projected_rows, projected_columns)
         )
 
-        cols = ", ".join(result["columns"])
-        # Include row data inline for small result sets so the model sees real values
-        inline = ""
-        if result["total"] <= 10:
-            inline = "\n" + json.dumps(result["rows"], indent=2, default=str)
-
-        return (
-            f"Retrieved {result['total']} rows from table '{table_name}' "
-            f"(columns: {cols}). Data has been sent directly to the user "
-            f"as inline messages. Do NOT fabricate or repeat the data. "
-            f"If the user wants a downloadable Excel file, call export_to_excel."
-            f"{inline}"
+        # ✅ Neutral signal ONLY (no table name)
+        return json.dumps(
+            {
+                "rows_retrieved": len(projected_rows),
+            }
         )
 
     def get_distinct_values(
@@ -215,6 +319,7 @@ def create_data_tools(
     ) -> str:
         if column == "Status":
             return json.dumps(sorted(VALID_STATUS_VALUES), indent=2)
+
         return json.dumps(
             loader.get_distinct_values(table_name, column),
             indent=2,
@@ -228,30 +333,32 @@ def create_data_tools(
         ],
     ) -> str:
         result = loader.query_table(table_name, query_expr)
+
         if result["total"] == 0:
             return "No rows matched."
+
+        projected_rows, projected_columns = _project_rows_and_columns(
+            rows=result["rows"],
+            columns=result["columns"],
+            query_expr=query_expr,
+        )
+
         _store_last_result(
             last_result,
             table_name,
-            result["rows"],
-            result["columns"],
+            projected_rows,
+            projected_columns,
         )
+
         data_buffer.extend(
-            _rows_to_chunks(result["rows"], result["columns"])
+            _rows_to_chunks(projected_rows, projected_columns)
         )
 
-        cols = ", ".join(result["columns"])
-        # Include row data inline for small result sets so the model sees real values
-        inline = ""
-        if result["total"] <= 10:
-            inline = "\n" + json.dumps(result["rows"], indent=2, default=str)
-
-        return (
-            f"Retrieved {result['total']} rows from table '{table_name}' "
-            f"(columns: {cols}). Data has been sent directly to the user "
-            f"as inline messages. Do NOT fabricate or repeat the data. "
-            f"If the user wants a downloadable Excel file, call export_to_excel."
-            f"{inline}"
+        # ✅ Neutral signal ONLY (no table name)
+        return json.dumps(
+            {
+                "rows_retrieved": len(projected_rows),
+            }
         )
 
     def group_by(
@@ -280,48 +387,62 @@ def create_data_tools(
         Generate an Excel file.
         Tool assumes kernel has already validated user intent.
         """
-
         if last_result and "rows" in last_result:
             rows = last_result["rows"]
             columns = last_result["columns"]
-            table = last_result.get("table", "data")
+            table = "obsolescence_results"
         else:
             if not table_name:
                 return "No data available for export."
+
             fc, fv = filter_column or None, filter_value or None
             error = _validate_status_filter(fc, fv)
             if error:
                 return error
+
             result = loader.get_rows(table_name, fc, fv)
             if result["total"] == 0:
                 return "No rows available for export."
-            rows = result["rows"]
-            columns = result["columns"]
+
+            projected_rows, projected_columns = _project_rows_and_columns(
+                rows=result["rows"],
+                columns=result["columns"],
+                filter_column=fc,
+                filter_value=fv,
+            )
+
+            rows = projected_rows
+            columns = projected_columns
             table = table_name
+
         os.makedirs(GENERATED_DIR, exist_ok=True)
         filename = f"{table}_{uuid4().hex[:8]}.xlsx"
         filepath = os.path.join(GENERATED_DIR, filename)
+
         df = pd.DataFrame(rows).reindex(columns=columns)
         df = df.where(pd.notna(df), "")
         df.to_excel(filepath, index=False, engine="openpyxl")
+
         file_url = (
             f"{base_url}/api/files/{filename}"
             if base_url
             else f"/api/files/{filename}"
         )
+
         file_buffer.append(
             {
                 "name": filename,
                 "path": file_url,
             }
         )
-        last_result.clear()
+
         return json.dumps(
             {
                 "excel_generated": True,
                 "row_count": len(rows),
             }
         )
+
     return [
         list_tables,
         get_schema,
