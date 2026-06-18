@@ -1,0 +1,1064 @@
+{
+  "timestamp_utc": "2026-06-18T13:53:08.037215Z",
+  "trials": 3,
+  "questions_per_trial": 10,
+  "attempts": [
+    {
+      "attempt_name": "baseline",
+      "timestamp_utc": "2026-06-18T13:53:08.037023Z",
+      "total_questions": 30,
+      "matched_accuracy": 1.0,
+      "strict_accuracy": 1.0,
+      "solid_threshold": 0.85,
+      "solid": true,
+      "table_names": {
+        "primary_table_name": "20260618000000_obsolescence",
+        "supplemental_table_name": "dimProducts"
+      },
+      "dataset_dir": "/tmp/routing_benchmark_659pt1gb/excel_data",
+      "mode_used": "offline",
+      "results": [
+        {
+          "question_id": "T1-Q1",
+          "question": "Can part 60-100-01 be scrapped?",
+          "intent": "scrap eligibility",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.003,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T1-Q2",
+          "question": "What is the status of part 60-100-01?",
+          "intent": "status",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T1-Q3",
+          "question": "Show me parts that may be eligible to be scrapped.",
+          "intent": "scrap list",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T1-Q4",
+          "question": "What is the description for part 60-100-01?",
+          "intent": "description",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T1-Q5",
+          "question": "What phase is part 60-100-01 in?",
+          "intent": "phase",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T1-Q6",
+          "question": "Is part 60-100-01 a custom button?",
+          "intent": "custom flag",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T1-Q7",
+          "question": "Is part 60-100-01 an international power cord?",
+          "intent": "intl power flag",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T1-Q8",
+          "question": "Is part 60-100-01 serialized?",
+          "intent": "serialized flag",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T1-Q9",
+          "question": "Does part 60-100-01 have an open work order?",
+          "intent": "work order status",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T1-Q10",
+          "question": "What is the QOH for part 60-100-01?",
+          "intent": "inventory quantity",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T2-Q1",
+          "question": "Can part 60-100-01 be scrapped?",
+          "intent": "scrap eligibility",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T2-Q2",
+          "question": "What is the status of part 60-100-01?",
+          "intent": "status",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T2-Q3",
+          "question": "Show me parts that may be eligible to be scrapped.",
+          "intent": "scrap list",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T2-Q4",
+          "question": "What is the description for part 60-100-01?",
+          "intent": "description",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T2-Q5",
+          "question": "What phase is part 60-100-01 in?",
+          "intent": "phase",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T2-Q6",
+          "question": "Is part 60-100-01 a custom button?",
+          "intent": "custom flag",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T2-Q7",
+          "question": "Is part 60-100-01 an international power cord?",
+          "intent": "intl power flag",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T2-Q8",
+          "question": "Is part 60-100-01 serialized?",
+          "intent": "serialized flag",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T2-Q9",
+          "question": "Does part 60-100-01 have an open work order?",
+          "intent": "work order status",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T2-Q10",
+          "question": "What is the QOH for part 60-100-01?",
+          "intent": "inventory quantity",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T3-Q1",
+          "question": "Can part 60-100-01 be scrapped?",
+          "intent": "scrap eligibility",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T3-Q2",
+          "question": "What is the status of part 60-100-01?",
+          "intent": "status",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T3-Q3",
+          "question": "Show me parts that may be eligible to be scrapped.",
+          "intent": "scrap list",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T3-Q4",
+          "question": "What is the description for part 60-100-01?",
+          "intent": "description",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T3-Q5",
+          "question": "What phase is part 60-100-01 in?",
+          "intent": "phase",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T3-Q6",
+          "question": "Is part 60-100-01 a custom button?",
+          "intent": "custom flag",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T3-Q7",
+          "question": "Is part 60-100-01 an international power cord?",
+          "intent": "intl power flag",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T3-Q8",
+          "question": "Is part 60-100-01 serialized?",
+          "intent": "serialized flag",
+          "expected_role": "supplemental",
+          "queried_tables": [
+            "dimProducts"
+          ],
+          "queried_roles": [
+            "supplemental"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.002,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T3-Q9",
+          "question": "Does part 60-100-01 have an open work order?",
+          "intent": "work order status",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        },
+        {
+          "question_id": "T3-Q10",
+          "question": "What is the QOH for part 60-100-01?",
+          "intent": "inventory quantity",
+          "expected_role": "primary",
+          "queried_tables": [
+            "20260618000000_obsolescence"
+          ],
+          "queried_roles": [
+            "primary"
+          ],
+          "matched_expected_role": true,
+          "strict_match": true,
+          "elapsed_seconds": 0.001,
+          "response_preview": "rows=1",
+          "error": ""
+        }
+      ],
+      "errors": [
+        "Live mode unavailable, switched to offline: Please provide either api_key, credential, or a client."
+      ]
+    }
+  ],
+  "chosen_attempt": "baseline",
+  "total_questions": 30,
+  "matched_accuracy": 1.0,
+  "strict_accuracy": 1.0,
+  "solid_threshold": 0.85,
+  "solid": true,
+  "table_names": {
+    "primary_table_name": "20260618000000_obsolescence",
+    "supplemental_table_name": "dimProducts"
+  },
+  "dataset_dir": "/tmp/routing_benchmark_659pt1gb/excel_data",
+  "mode_used": "offline",
+  "results": [
+    {
+      "question_id": "T1-Q1",
+      "question": "Can part 60-100-01 be scrapped?",
+      "intent": "scrap eligibility",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.003,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T1-Q2",
+      "question": "What is the status of part 60-100-01?",
+      "intent": "status",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T1-Q3",
+      "question": "Show me parts that may be eligible to be scrapped.",
+      "intent": "scrap list",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T1-Q4",
+      "question": "What is the description for part 60-100-01?",
+      "intent": "description",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T1-Q5",
+      "question": "What phase is part 60-100-01 in?",
+      "intent": "phase",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T1-Q6",
+      "question": "Is part 60-100-01 a custom button?",
+      "intent": "custom flag",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T1-Q7",
+      "question": "Is part 60-100-01 an international power cord?",
+      "intent": "intl power flag",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T1-Q8",
+      "question": "Is part 60-100-01 serialized?",
+      "intent": "serialized flag",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T1-Q9",
+      "question": "Does part 60-100-01 have an open work order?",
+      "intent": "work order status",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T1-Q10",
+      "question": "What is the QOH for part 60-100-01?",
+      "intent": "inventory quantity",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T2-Q1",
+      "question": "Can part 60-100-01 be scrapped?",
+      "intent": "scrap eligibility",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T2-Q2",
+      "question": "What is the status of part 60-100-01?",
+      "intent": "status",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T2-Q3",
+      "question": "Show me parts that may be eligible to be scrapped.",
+      "intent": "scrap list",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T2-Q4",
+      "question": "What is the description for part 60-100-01?",
+      "intent": "description",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T2-Q5",
+      "question": "What phase is part 60-100-01 in?",
+      "intent": "phase",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T2-Q6",
+      "question": "Is part 60-100-01 a custom button?",
+      "intent": "custom flag",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T2-Q7",
+      "question": "Is part 60-100-01 an international power cord?",
+      "intent": "intl power flag",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T2-Q8",
+      "question": "Is part 60-100-01 serialized?",
+      "intent": "serialized flag",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T2-Q9",
+      "question": "Does part 60-100-01 have an open work order?",
+      "intent": "work order status",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T2-Q10",
+      "question": "What is the QOH for part 60-100-01?",
+      "intent": "inventory quantity",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T3-Q1",
+      "question": "Can part 60-100-01 be scrapped?",
+      "intent": "scrap eligibility",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T3-Q2",
+      "question": "What is the status of part 60-100-01?",
+      "intent": "status",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T3-Q3",
+      "question": "Show me parts that may be eligible to be scrapped.",
+      "intent": "scrap list",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T3-Q4",
+      "question": "What is the description for part 60-100-01?",
+      "intent": "description",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T3-Q5",
+      "question": "What phase is part 60-100-01 in?",
+      "intent": "phase",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T3-Q6",
+      "question": "Is part 60-100-01 a custom button?",
+      "intent": "custom flag",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T3-Q7",
+      "question": "Is part 60-100-01 an international power cord?",
+      "intent": "intl power flag",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T3-Q8",
+      "question": "Is part 60-100-01 serialized?",
+      "intent": "serialized flag",
+      "expected_role": "supplemental",
+      "queried_tables": [
+        "dimProducts"
+      ],
+      "queried_roles": [
+        "supplemental"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.002,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T3-Q9",
+      "question": "Does part 60-100-01 have an open work order?",
+      "intent": "work order status",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    },
+    {
+      "question_id": "T3-Q10",
+      "question": "What is the QOH for part 60-100-01?",
+      "intent": "inventory quantity",
+      "expected_role": "primary",
+      "queried_tables": [
+        "20260618000000_obsolescence"
+      ],
+      "queried_roles": [
+        "primary"
+      ],
+      "matched_expected_role": true,
+      "strict_match": true,
+      "elapsed_seconds": 0.001,
+      "response_preview": "rows=1",
+      "error": ""
+    }
+  ],
+  "errors": [
+    "Live mode unavailable, switched to offline: Please provide either api_key, credential, or a client."
+  ]
+}
