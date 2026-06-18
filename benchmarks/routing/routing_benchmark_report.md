@@ -1,6 +1,6 @@
 # Routing Benchmark Report
 
-- **Timestamp (UTC):** 2026-06-18T13:53:08.037215Z
+- **Timestamp (UTC):** 2026-06-18T14:12:36.213213Z
 - **Trials:** 3
 - **Questions/trial:** 10
 - **Total evaluated:** 30

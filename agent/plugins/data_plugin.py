@@ -378,6 +378,26 @@ def create_data_tools(
             default=str,
         )
 
+    def lookup_part_details(
+        part_number: Annotated[str, Field(description="Part number to look up in the product catalogue")],
+    ) -> str:
+        """Return product-catalogue details for a part from supplemental tables."""
+        result = loader.lookup_part(part_number)
+        supplemental_rows: list[dict] = []
+        supplemental_cols: list[str] = []
+        for tname, rows in result.get("tables", {}).items():
+            if loader.get_table_roles().get(tname) == "supplemental":
+                supplemental_rows = rows
+                supplemental_cols = result["columns_by_table"].get(tname, [])
+                break
+
+        if not supplemental_rows:
+            return json.dumps({"rows_retrieved": 0})
+
+        _store_last_result(last_result, "product_catalogue", supplemental_rows, supplemental_cols)
+        data_buffer.extend(_rows_to_chunks(supplemental_rows, supplemental_cols))
+        return json.dumps({"rows_retrieved": len(supplemental_rows)})
+
     def export_to_excel(
         table_name: Annotated[str, Field(description="Table name (optional)")] = "",
         filter_column: Annotated[str, Field(description="Optional filter column")] = "",
@@ -451,5 +471,6 @@ def create_data_tools(
         get_distinct_values,
         query_table,
         group_by,
+        lookup_part_details,
         export_to_excel,
     ]
