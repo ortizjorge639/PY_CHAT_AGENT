@@ -98,13 +98,23 @@ After deploying the promoted code:
 
 A separate comparison should be done before shipping back to the customer.
 
-When ready, request the customer code path and then compare:
+Customer comparison path (provided by user):
+- `C:\Users\jortizflores\Downloads\PY.ChatAgent_Obsolescence (2)`
+
+Compare this repository against that customer path for:
 - prompt content and routing instructions
 - SQL environment variable names and values
 - table names and schemas
 - manual test prompts and expected responses
 - any local patches in the customer branch that are not yet present here
 - deployment settings that could affect SQL loading or authentication
+
+Suggested comparison flow:
+- generate file inventories in both locations and identify missing/extra files
+- diff key runtime files (`agent/kernel.py`, `agent/plugins/data_plugin.py`, `data/loader.py`, `config/settings.py`, `main.py`)
+- diff `.env` templates/settings documentation to catch configuration drift
+- record any behavior differences that change customer-visible responses
+- resolve gaps before final customer shipment
 
 Do not finalize customer delivery until this comparison is complete.
 
@@ -116,4 +126,4 @@ Do not finalize customer delivery until this comparison is complete.
 - [ ] merged and re-validated on `baseline/main-tree-2026-06-17`
 - [ ] merged and re-validated on `main`
 - [ ] deployed environment smoke-tested
-- [ ] customer codebase comparison completed after obtaining the customer path
+- [ ] customer codebase comparison completed using `C:\Users\jortizflores\Downloads\PY.ChatAgent_Obsolescence (2)`
