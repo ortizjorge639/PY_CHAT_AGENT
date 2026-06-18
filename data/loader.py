@@ -221,25 +221,29 @@ class DataLoader:
                 )
                 time.sleep(retry_delay)
 
-        table = s.sql_table.strip()
-        if not table:
+        tables_to_load = s.sql_table_list
+        if not tables_to_load:
             conn.close()
-            raise ValueError("No SQL table configured. Set SQL_TABLE.")
+            raise ValueError("No SQL tables configured. Set SQL_TABLE or SQL_TABLES.")
 
-        df = pd.read_sql(f"SELECT * FROM {_bracket_table_name(table)}", conn)
-        df.columns = [str(c).strip() for c in df.columns]
-        # Coerce string columns that contain numeric values to numeric dtype
-        for col in df.columns:
-            if df[col].dtype == object or pd.api.types.is_string_dtype(df[col]):
-                converted = pd.to_numeric(df[col], errors="coerce")
-                if converted.notna().sum() == df[col].notna().sum() and converted.notna().sum() > 0:
-                    df[col] = converted
-        self._tables[table] = df
-        self._table_roles[table] = "primary"
-        logger.info(
-            "Loaded SQL table '%s' [primary] (%d rows, %d cols)",
-            table, len(df), len(df.columns),
-        )
+        primary = (s.sql_primary_table or tables_to_load[0]).strip()
+
+        for table in tables_to_load:
+            role = "primary" if table.strip() == primary else "supplemental"
+            df = pd.read_sql(f"SELECT * FROM {_bracket_table_name(table)}", conn)
+            df.columns = [str(c).strip() for c in df.columns]
+            # Coerce string columns that contain numeric values to numeric dtype
+            for col in df.columns:
+                if df[col].dtype == object or pd.api.types.is_string_dtype(df[col]):
+                    converted = pd.to_numeric(df[col], errors="coerce")
+                    if converted.notna().sum() == df[col].notna().sum() and converted.notna().sum() > 0:
+                        df[col] = converted
+            self._tables[table] = df
+            self._table_roles[table] = role
+            logger.info(
+                "Loaded SQL table '%s' [%s] (%d rows, %d cols)",
+                table, role, len(df), len(df.columns),
+            )
 
         conn.close()
 
