@@ -385,16 +385,18 @@ def create_data_tools(
         result = loader.lookup_part(part_number)
         supplemental_rows: list[dict] = []
         supplemental_cols: list[str] = []
+        supplemental_table_name: str = ""
         for tname, rows in result.get("tables", {}).items():
             if loader.get_table_roles().get(tname) == "supplemental":
                 supplemental_rows = rows
                 supplemental_cols = result["columns_by_table"].get(tname, [])
+                supplemental_table_name = tname
                 break
 
         if not supplemental_rows:
-            return json.dumps({"rows_retrieved": 0})
+            return json.dumps({"error": f"Part number '{part_number}' not found in product catalogue."})
 
-        _store_last_result(last_result, "product_catalogue", supplemental_rows, supplemental_cols)
+        _store_last_result(last_result, supplemental_table_name, supplemental_rows, supplemental_cols)
         data_buffer.extend(_rows_to_chunks(supplemental_rows, supplemental_cols))
         return json.dumps({"rows_retrieved": len(supplemental_rows)})
 
