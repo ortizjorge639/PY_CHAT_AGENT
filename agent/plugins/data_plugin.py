@@ -104,6 +104,18 @@ def _validate_status_filter(
     return None
 
 
+def _parse_supplemental_filters(raw_filters: str) -> dict[str, str]:
+    if not raw_filters.strip():
+        return {}
+    try:
+        parsed = json.loads(raw_filters)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid supplemental_filters_json: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("supplemental_filters_json must decode to an object")
+    return {str(key): str(value) for key, value in parsed.items()}
+
+
 def _store_last_result(
     last_result: dict,
     table_name: str,
@@ -361,6 +373,72 @@ def create_data_tools(
             }
         )
 
+    def query_primary_with_supplemental_filters(
+        table_name: Annotated[str, Field(description="Primary table name")],
+        supplemental_filters_json: Annotated[
+            str,
+            Field(description="JSON object of supplemental filters, e.g. {\"Phase\": \"active\"}"),
+        ],
+        query_expr: Annotated[
+            str,
+            Field(description="Optional pandas DataFrame.query() expression for the primary table"),
+        ] = "",
+    ) -> str:
+        supplemental_filters = _parse_supplemental_filters(supplemental_filters_json)
+        result = loader.query_table_with_cross_filter(
+            table_name,
+            query_expr or None,
+            supplemental_filters,
+        )
+
+        if result["total"] == 0:
+            return "No rows matched."
+
+        projected_rows, projected_columns = _project_rows_and_columns(
+            rows=result["rows"],
+            columns=result["columns"],
+            query_expr=query_expr or None,
+        )
+
+        _store_last_result(
+            last_result,
+            table_name,
+            projected_rows,
+            projected_columns,
+        )
+
+        data_buffer.extend(_rows_to_chunks(projected_rows, projected_columns))
+
+        return json.dumps(
+            {
+                "rows_retrieved": len(projected_rows),
+            }
+        )
+
+    def count_primary_with_supplemental_filters(
+        table_name: Annotated[str, Field(description="Primary table name")],
+        supplemental_filters_json: Annotated[
+            str,
+            Field(description="JSON object of supplemental filters, e.g. {\"Phase\": \"active\"}"),
+        ],
+        query_expr: Annotated[
+            str,
+            Field(description="Optional pandas DataFrame.query() expression for the primary table"),
+        ] = "",
+    ) -> str:
+        supplemental_filters = _parse_supplemental_filters(supplemental_filters_json)
+        result = loader.query_table_with_cross_filter(
+            table_name,
+            query_expr or None,
+            supplemental_filters,
+        )
+        return json.dumps(
+            {
+                "count": result["total"],
+            },
+            indent=2,
+        )
+
     def group_by(
         table_name: Annotated[str, Field(description="Table name")],
         group_column: Annotated[str, Field(description="Group-by column")],
@@ -472,6 +550,8 @@ def create_data_tools(
         get_rows,
         get_distinct_values,
         query_table,
+        query_primary_with_supplemental_filters,
+        count_primary_with_supplemental_filters,
         group_by,
         lookup_part_details,
         export_to_excel,

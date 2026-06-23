@@ -3,12 +3,42 @@
 import logging
 
 from botbuilder.core import ActivityHandler, TurnContext
-from botbuilder.schema import Activity, ActivityTypes
+from botbuilder.schema import Activity, ActivityTypes, Attachment
 
 from agent.kernel import AgentKernel
 from bot.conversation_freshness_skill import ConversationFreshnessSkill
 
 logger = logging.getLogger(__name__)
+
+
+def _build_visualization_attachment(visualization: dict) -> Attachment | None:
+    image_url = visualization.get("teams", {}).get("image_url", "")
+    if not image_url:
+        return None
+    title = visualization.get("title", "Chart")
+    alt_text = visualization.get("teams", {}).get("alt_text", title)
+    return Attachment(
+        content_type="application/vnd.microsoft.card.adaptive",
+        content={
+            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+            "type": "AdaptiveCard",
+            "version": "1.4",
+            "body": [
+                {
+                    "type": "TextBlock",
+                    "text": title,
+                    "weight": "Bolder",
+                    "wrap": True,
+                },
+                {
+                    "type": "Image",
+                    "url": image_url,
+                    "altText": alt_text,
+                    "size": "Stretch",
+                },
+            ],
+        },
+    )
 
 
 class ChatBot(ActivityHandler):
@@ -102,6 +132,17 @@ class ChatBot(ActivityHandler):
         # Send LLM commentary
         logger.info("Bot [%s]: %s", conversation_id, response["text"][:200])
         await turn_context.send_activity(response["text"])
+
+        for visualization in response.get("visualizations", []):
+            attachment = _build_visualization_attachment(visualization)
+            if not attachment:
+                continue
+            await turn_context.send_activity(
+                Activity(
+                    type=ActivityTypes.message,
+                    attachments=[attachment],
+                )
+            )
 
     async def on_members_added_activity(self, members_added, turn_context: TurnContext) -> None:
         """Send a welcome message when the bot joins a conversation."""

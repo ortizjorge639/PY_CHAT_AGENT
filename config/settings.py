@@ -1,5 +1,6 @@
 """Application settings loaded from .env via pydantic-settings."""
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -48,6 +49,11 @@ class Settings(BaseSettings):
     # Access control
     require_auth: bool = False
     file_download_group_id: str = ""
+
+    # Chart lifecycle
+    chart_retention_hours: int = Field(default=2, ge=1)
+    chart_max_count: int = Field(default=100, ge=1)
+    chart_cleanup_enabled: bool = True
 
     # Telemetry
     applicationinsights_connection_string: str = ""

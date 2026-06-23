@@ -5,6 +5,7 @@ Microsoft Agent Framework setup — Azure OpenAI agent with tool calling.
 import asyncio
 import logging
 import re
+from typing import Any
 from typing import Dict, Optional
 
 try:
@@ -18,6 +19,7 @@ except Exception as exc:  # pragma: no cover - exercised in dependency-mismatch 
 from config.settings import Settings
 from data.loader import DataLoader
 from agent.plugins.data_plugin import create_data_tools
+from agent.plugins.viz_plugin import create_aggregated_chart, format_rows_as_markdown_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +57,9 @@ SUPPLEMENTAL TABLE — production.dimProducts (product catalogue):
   for the Status when such information is available.
 - When a user asks about a specific PartNumber, you MUST retrieve
   the row using tools.
-- Tables are NEVER joined. Query each independently.
+- Controlled cross-table filtering is allowed only when the user asks
+    for primary-table results filtered by supplemental-table attributes.
+    Use PartNumber as the lookup key and return primary-table rows.
 
 ----------------------------------------------------------------
 TABLE ROUTING RULES (STRICT)
@@ -63,7 +67,9 @@ TABLE ROUTING RULES (STRICT)
 - Scrap eligibility / Status / Disposition  → PRIMARY table
 - Description / Phase / product flags       → call lookup_part_details(part_number=…)
 - Unspecified part question                 → check PRIMARY first; use supplemental on follow-up
-- Do NOT mix columns from different tables in one response.
+- Do NOT mix columns from different tables in one response unless the
+    user explicitly asks for a primary-table result constrained by
+    supplemental-table attributes.
 
 ----------------------------------------------------------------
 SPECIAL QUERY RULES (STRICT)
@@ -188,6 +194,31 @@ PRIMARY_PART_KEYWORDS = (
     "where used",
 )
 
+CHART_KEYWORDS = ("chart", "graph", "visualization", "plot")
+DATE_ADDED_ALIASES = ("date added", "dateadded")
+PROCESSED_DATE_ALIASES = ("processed date", "processed_date")
+MODEL_PROCESSED_DATE_ALIASES = ("model processed date", "modelprocesseddate")
+TREND_ALIASES = ("trend", "over time")
+BAR_ALIASES = ("bar", "column", "histogram")
+PIE_ALIASES = ("pie", "donut", "doughnut")
+
+PRIMARY_STATUS_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("product usage",), "Product USAGE"),
+    (("component request",), "Component Request - Please review Logid"),
+    (("open workorder", "open work order"), "Open WorkOrder"),
+    (("open sales order",), "Open Sales Order"),
+    (("sold in past two years", "sold past two years"), "Sold in Past Two Years"),
+    (("need further review", "no bom"), "Need Further Review-NO BOM"),
+    (("in whereused with parent", "whereused with parent"), "In WhereUsed with parent"),
+    (("repair usage",), "REPAIR USAGE- Need Further review"),
+    (("custom button",), "NOT eligible for scrap - Custom Button"),
+    (("international powercord", "international power cord"), "NOT eligible for scrap - International Powercord"),
+    (("bin stock",), "NOT eligible for scrap - Bin Stock"),
+    (("bin location", "show bin"), "NOT eligible for scrap - Bin Location-[SHOW]"),
+    (("not a physical part",), "NOT eligible for scrap - NOT A PHYSICAL PART"),
+    (("no stock",), "No stock"),
+)
+
 def interpret_scrap_status(part: str, status: str) -> str:
     """
     Maps Status values to exact business-approved human responses.
@@ -258,6 +289,195 @@ def classify_part_query_intent(text: str) -> str:
 def wants_excel(text: str) -> bool:
     text = text.lower()
     return any(kw in text for kw in ("excel", "spreadsheet", "download", "export"))
+
+
+def _extract_phase_filter(text: str) -> Optional[str]:
+    match = re.search(r"phase(?:\s*(?:=|is|of|in))?\s+([\w\-]+)", text, flags=re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def _extract_supplemental_filters(text: str) -> dict[str, str]:
+    lowered = text.lower()
+    filters: dict[str, str] = {}
+
+    phase_filter = _extract_phase_filter(text)
+    if phase_filter:
+        filters["Phase"] = phase_filter
+
+    if "custom button" in lowered or "custombutton" in lowered:
+        filters["CustomButton"] = "1"
+
+    if "international power" in lowered or "power cord" in lowered or "intl power" in lowered:
+        filters["International_PowerCord"] = "1"
+
+    return filters
+
+
+def _extract_primary_status_filters(text: str) -> list[str]:
+    lowered = text.lower()
+    statuses: list[str] = []
+    seen: set[str] = set()
+
+    for keywords, canonical_status in PRIMARY_STATUS_KEYWORDS:
+        if any(keyword in lowered for keyword in keywords) and canonical_status not in seen:
+            statuses.append(canonical_status)
+            seen.add(canonical_status)
+
+    return statuses
+
+
+def _build_primary_query_expr(user_message: str, wants_scrap: bool) -> str | None:
+    explicit_statuses = _extract_primary_status_filters(user_message)
+    if explicit_statuses:
+        if len(explicit_statuses) == 1:
+            status = explicit_statuses[0].replace("'", "\\'")
+            return f"Status == '{status}'"
+        escaped = [status.replace("'", "\\'") for status in explicit_statuses]
+        serialized = ", ".join(f"'{value}'" for value in escaped)
+        return f"Status in [{serialized}]"
+
+    if wants_scrap:
+        return "Status == 'May be eligible to be scrapped'"
+
+    return None
+
+
+def _mentions_scrappable_parts(text: str) -> bool:
+    lowered = text.lower()
+    return "scrap" in lowered or "scrapp" in lowered
+
+
+def _is_line_chart_request(text: str) -> bool:
+    return _is_chart_request(text)
+
+
+def _is_chart_request(text: str) -> bool:
+    lowered = text.lower()
+    has_chart_keyword = any(keyword in lowered for keyword in CHART_KEYWORDS)
+    has_trend_keyword = any(keyword in lowered for keyword in TREND_ALIASES)
+    has_metric_hint = any(keyword in lowered for keyword in ("count", "counts", "x axis", "y axis", "by"))
+
+    if "line chart" in lowered:
+        return True
+    if has_chart_keyword and has_metric_hint:
+        return True
+    if has_trend_keyword and ("scrap" in lowered or "count" in lowered):
+        return True
+    if "line" in lowered and (has_chart_keyword or has_trend_keyword):
+        return True
+    if any(alias in lowered for alias in BAR_ALIASES + PIE_ALIASES):
+        return True
+    return False
+
+
+def _extract_chart_type(text: str) -> str:
+    lowered = text.lower()
+    if any(alias in lowered for alias in PIE_ALIASES):
+        return "pie"
+    if any(alias in lowered for alias in BAR_ALIASES):
+        return "bar"
+    return "line"
+
+
+def _normalize_identifier(value: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", value.lower())
+
+
+def _resolve_column_hint(hint: str, available_columns: list[str]) -> str | None:
+    normalized_hint = _normalize_identifier(hint)
+    if not normalized_hint:
+        return None
+
+    by_normalized = { _normalize_identifier(column): column for column in available_columns }
+    if normalized_hint in by_normalized:
+        return by_normalized[normalized_hint]
+
+    partial_matches = [
+        column for column in available_columns
+        if normalized_hint in _normalize_identifier(column) or _normalize_identifier(column) in normalized_hint
+    ]
+    if partial_matches:
+        return min(partial_matches, key=len)
+    return None
+
+
+def _requested_date_added(text: str) -> bool:
+    lowered = text.lower()
+    return any(alias in lowered for alias in DATE_ADDED_ALIASES)
+
+
+def _supplemental_non_null_count(loader: DataLoader, column: str) -> int:
+    total = 0
+    for table_name in loader.get_tables_by_role("supplemental"):
+        table = loader._tables.get(table_name)
+        if table is None or column not in table.columns:
+            continue
+        total += int(table[column].notna().sum())
+    return total
+
+
+def _extract_chart_x_column(text: str, available_columns: list[str]) -> str:
+    lowered = text.lower()
+    if any(alias in lowered for alias in DATE_ADDED_ALIASES):
+        for candidate in ("DateAdded", "DateAdded_supplemental"):
+            if candidate in available_columns:
+                return candidate
+    if any(alias in lowered for alias in PROCESSED_DATE_ALIASES):
+        for candidate in ("Processed_Date", "ModelProcessedDate"):
+            if candidate in available_columns:
+                return candidate
+    if any(alias in lowered for alias in MODEL_PROCESSED_DATE_ALIASES):
+        if "ModelProcessedDate" in available_columns:
+            return "ModelProcessedDate"
+
+    x_axis_match = re.search(r"x\s*axis\s*(?:is|=)\s*([\w\s/\-$']+)", text, flags=re.IGNORECASE)
+    if x_axis_match:
+        resolved = _resolve_column_hint(x_axis_match.group(1).strip(), available_columns)
+        if resolved:
+            return resolved
+
+    chart_type = _extract_chart_type(text)
+    if chart_type == "line":
+        for candidate in ("DateAdded", "DateAdded_supplemental", "Processed_Date", "ModelProcessedDate"):
+            if candidate in available_columns:
+                return candidate
+        raise ValueError("No supported date column is available for charting.")
+
+    for candidate in ("Status", "P/C Phase", "Phase", "Processed_Date", "ModelProcessedDate", "PartNumber"):
+        if candidate in available_columns:
+            return candidate
+    raise ValueError("No suitable x-axis column is available for charting.")
+
+
+def _extract_chart_metric(text: str, available_columns: list[str]) -> tuple[str, str | None]:
+    lowered = text.lower()
+    if "y axis" in lowered and "count" in lowered:
+        return ("count", None)
+    if any(token in lowered for token in ("count", "counts", "number of")):
+        return ("count", None)
+
+    metric = "count"
+    if any(token in lowered for token in ("average", "avg", "mean")):
+        metric = "avg"
+    elif any(token in lowered for token in ("sum", "total")):
+        metric = "sum"
+
+    y_axis_match = re.search(r"y\s*axis\s*(?:is|=)\s*([\w\s/\-$']+)", text, flags=re.IGNORECASE)
+    if y_axis_match:
+        y_hint = y_axis_match.group(1).strip()
+        if _normalize_identifier(y_hint) == "count":
+            return ("count", None)
+        resolved = _resolve_column_hint(y_hint, available_columns)
+        if resolved:
+            return (metric if metric != "count" else "sum", resolved)
+
+    metric_col_match = re.search(r"(?:sum|total|average|avg|mean)(?:\s+of)?\s+([\w\s/\-$']+)", text, flags=re.IGNORECASE)
+    if metric_col_match:
+        resolved = _resolve_column_hint(metric_col_match.group(1).strip(), available_columns)
+        if resolved:
+            return (metric if metric != "count" else "sum", resolved)
+
+    return ("count", None)
 
 
 def _as_bool_flag(value: object) -> Optional[bool]:
@@ -370,8 +590,9 @@ class AgentKernel:
         self._data_buffer: list[str] = []
         self._file_buffer: list[dict] = []
         self._last_result_buffer: dict = {}
+        self._settings = settings
         self._data_loader = data_loader
-        self._lock = asyncio.Lock()
+        self._conversation_locks: Dict[str, asyncio.Lock] = {}
         client = AzureOpenAIChatClient(
             api_key=settings.azure_openai_api_key,
             endpoint=settings.azure_openai_endpoint,
@@ -403,19 +624,148 @@ class AgentKernel:
             self._sessions[conversation_id] = self._agent.create_session()
         return self._sessions[conversation_id]
 
+    def _get_lock(self, conversation_id: str) -> asyncio.Lock:
+        if conversation_id not in self._conversation_locks:
+            self._conversation_locks[conversation_id] = asyncio.Lock()
+        return self._conversation_locks[conversation_id]
+
     def reset_conversation(self, conversation_id: str) -> None:
         """Clears the cached session so the next message starts fresh."""
         self._sessions.pop(conversation_id, None)
+        self._conversation_locks.pop(conversation_id, None)
+
+    def reset_all_sessions(self) -> int:
+        """Clears all cached sessions and returns the number removed."""
+        cleared = len(self._sessions)
+        self._sessions.clear()
+        self._conversation_locks.clear()
+        return cleared
+
+    def _handle_structured_data_request(self, user_message: str) -> dict[str, Any] | None:
+        supplemental_filters = _extract_supplemental_filters(user_message)
+        wants_scrap = _mentions_scrappable_parts(user_message)
+        wants_list = "list" in user_message.lower()
+        wants_chart = _is_chart_request(user_message)
+
+        if not (wants_list or wants_chart):
+            return None
+        if not wants_scrap and not supplemental_filters and not wants_chart:
+            return None
+
+        primary_table = self._data_loader.get_primary_table_name()
+        query_expr = _build_primary_query_expr(user_message, wants_scrap)
+
+        if wants_chart:
+            merged = self._data_loader.get_cross_filtered_frame(
+                primary_table,
+                query_expr=query_expr,
+                supplemental_filters=supplemental_filters or None,
+            )
+            if _requested_date_added(user_message):
+                has_date_added = any(column in merged.columns for column in ("DateAdded", "DateAdded_supplemental"))
+                if not has_date_added:
+                    available_date_columns = [
+                        column
+                        for column in ("ModelProcessedDate", "Processed_Date")
+                        if column in merged.columns
+                    ]
+                    if available_date_columns:
+                        options = ", ".join(available_date_columns)
+                        return {
+                            "text": f"DateAdded is not available in the current dataset. Available date columns: {options}.",
+                            "data_chunks": [],
+                            "files": [],
+                            "visualizations": [],
+                        }
+                    return {
+                        "text": "DateAdded is not available in the current dataset.",
+                        "data_chunks": [],
+                        "files": [],
+                        "visualizations": [],
+                    }
+            if merged.empty:
+                return {
+                    "text": "No data was returned.",
+                    "data_chunks": [],
+                    "files": [],
+                    "visualizations": [],
+                }
+            x_column = _extract_chart_x_column(user_message, list(merged.columns))
+            chart_type = _extract_chart_type(user_message)
+            y_metric, y_column = _extract_chart_metric(user_message, list(merged.columns))
+            if y_metric in {"sum", "avg"} and not y_column:
+                return {
+                    "text": "Please specify a numeric y-axis column (for example: y axis is QOH).",
+                    "data_chunks": [],
+                    "files": [],
+                    "visualizations": [],
+                }
+            if y_metric == "count":
+                chart_title = f"Count by {x_column}"
+            else:
+                chart_title = f"{y_metric.upper()}({y_column}) by {x_column}"
+
+            visualization = create_aggregated_chart(
+                merged,
+                chart_type=chart_type,
+                x_column=x_column,
+                y_metric=y_metric,
+                y_column=y_column,
+                title=chart_title,
+                base_url=self._settings.base_url,
+            )
+            y_label = "count" if y_metric == "count" else f"{y_metric} of {y_column}"
+            return {
+                "text": f"Created a {chart_type} chart with {x_column} on the x-axis and {y_label} on the y-axis.",
+                "data_chunks": [],
+                "files": [],
+                "visualizations": [visualization],
+            }
+
+        if wants_list and (wants_scrap or supplemental_filters):
+            result = self._data_loader.query_table_with_cross_filter(
+                primary_table,
+                query_expr=query_expr,
+                supplemental_filters=supplemental_filters or None,
+            )
+            if result["total"] == 0:
+                if "Phase" in supplemental_filters and _supplemental_non_null_count(self._data_loader, "Phase") == 0:
+                    return {
+                        "text": "No data was returned because supplemental column Phase is empty in the current dataset.",
+                        "data_chunks": [],
+                        "files": [],
+                        "visualizations": [],
+                    }
+                return {
+                    "text": "No data was returned.",
+                    "data_chunks": [],
+                    "files": [],
+                    "visualizations": [],
+                }
+            preferred_columns = [
+                column for column in ["PartNumber", "Status", "Processed_Date"] if column in result["columns"]
+            ] or result["columns"]
+            return {
+                "text": f"{result['total']} records match your request.",
+                "data_chunks": format_rows_as_markdown_chunks(result["rows"], preferred_columns),
+                "files": [],
+                "visualizations": [],
+            }
+
+        return None
 
     # -------------------------------------------------------------------
     # MAIN ENTRY
     # -------------------------------------------------------------------
 
     async def ask(self, conversation_id: str, user_message: str) -> dict:
-        async with self._lock:
+        async with self._get_lock(conversation_id):
             self._data_buffer.clear()
             self._file_buffer.clear()
             self._last_result_buffer.clear()
+            structured_response = self._handle_structured_data_request(user_message)
+            if structured_response is not None:
+                return structured_response
             session = self._get_session(conversation_id)
             wants_list = "list" in user_message.lower()
             excel_requested = wants_excel(user_message)
@@ -489,4 +839,5 @@ class AgentKernel:
                 "text": response_text,
                 "data_chunks": data_chunks,
                 "files": files,
+                "visualizations": [],
             }

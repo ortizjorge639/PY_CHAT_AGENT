@@ -2,6 +2,7 @@
 
 import logging
 import time
+from collections import OrderedDict
 from datetime import datetime, timezone
 from difflib import get_close_matches
 from pathlib import Path
@@ -14,6 +15,8 @@ from config.settings import Settings
 logger = logging.getLogger(__name__)
 
 CHUNK_SIZE: int = 60
+DATE_COLUMNS = {"DateAdded", "Processed_Date", "Effective Date"}
+PART_NUMBER_COLUMN = "PartNumber"
 
 
 def _bracket_table_name(raw: str) -> str:
@@ -23,6 +26,10 @@ def _bracket_table_name(raw: str) -> str:
         return raw
     parts = raw.split(".", 1)
     return ".".join(f"[{p}]" for p in parts)
+
+
+def _normalize_table_name(raw: str) -> str:
+    return raw.replace("[", "").replace("]", "").strip().lower()
 
 
 def _fuzzy_resolve(needle: str, haystack: list[str], label: str = "value") -> str:
@@ -56,6 +63,8 @@ class DataLoader:
         self._settings = settings
         self._tables: dict[str, pd.DataFrame] = {}
         self._table_roles: dict[str, str] = {}  # table_name → "primary" | "supplemental"
+        self._cross_filter_cache: OrderedDict[tuple[Any, ...], frozenset[str]] = OrderedDict()
+        self._cross_filter_cache_limit = 20
         self._is_loaded = False
         self._load_error: Exception | None = None
         self._last_loaded_at: datetime | None = None
@@ -99,8 +108,10 @@ class DataLoader:
         logger.info("Data reload requested (last loaded: %s)", self._last_loaded_at)
         old_tables = self._tables
         old_roles = self._table_roles
+        old_cache = self._cross_filter_cache
         self._tables = {}
         self._table_roles = {}
+        self.clear_filter_cache()
         self._is_loaded = False
         try:
             self._load()
@@ -112,6 +123,7 @@ class DataLoader:
             # Roll back to previous data so the app keeps working
             self._tables = old_tables
             self._table_roles = old_roles
+            self._cross_filter_cache = old_cache
             self._is_loaded = True
             self._load_error = exc
             logger.error("Data reload failed, keeping previous data: %s", exc, exc_info=True)
@@ -151,7 +163,7 @@ class DataLoader:
                     f"{fp.stem}__{sheet}" if len(xls.sheet_names) > 1 else fp.stem
                 )
                 df = pd.read_excel(xls, sheet_name=sheet)
-                df.columns = [str(c).strip() for c in df.columns]
+                df = self._normalize_dataframe(df)
                 self._tables[table_name] = df
                 self._table_roles[table_name] = role
                 logger.info(
@@ -231,7 +243,8 @@ class DataLoader:
         for table in tables_to_load:
             role = "primary" if table.strip() == primary else "supplemental"
             df = pd.read_sql(f"SELECT * FROM {_bracket_table_name(table)}", conn)
-            df.columns = [str(c).strip() for c in df.columns]
+            df = self._align_sql_shape(table, df, conn)
+            df = self._normalize_dataframe(df)
             # Coerce string columns that contain numeric values to numeric dtype
             for col in df.columns:
                 if df[col].dtype == object or pd.api.types.is_string_dtype(df[col]):
@@ -247,6 +260,112 @@ class DataLoader:
 
         conn.close()
 
+    @staticmethod
+    def _find_column_case_insensitive(columns: list[str], target: str) -> str | None:
+        target_lower = target.lower()
+        for column in columns:
+            if str(column).strip().lower() == target_lower:
+                return str(column)
+        return None
+
+    def _copy_column_if_missing(self, df: pd.DataFrame, source: str, target: str) -> None:
+        if target in df.columns:
+            return
+        source_column = self._find_column_case_insensitive(list(df.columns), source)
+        if source_column:
+            df[target] = df[source_column]
+
+    def _align_obsolescence_results(self, df: pd.DataFrame) -> pd.DataFrame:
+        self._copy_column_if_missing(df, "p/c phase", "P/C Phase")
+        self._copy_column_if_missing(df, "obsolete reserve", "Obsolete Reserve$")
+        self._copy_column_if_missing(df, "reza's list", "Accounting List")
+        self._copy_column_if_missing(df, "ModelProcessedDate", "Processed_Date")
+
+        expected = [
+            "PartNumber",
+            "P/C Phase",
+            "DateAdded",
+            "QOH",
+            "Obsolete Reserve$",
+            "Nikhol's Comment",
+            "Status",
+            "Details",
+            "RevisionLevel",
+            "Accounting List",
+            "Processed_Date",
+        ]
+        present_expected = [column for column in expected if column in df.columns]
+        extras = [column for column in df.columns if column not in present_expected]
+        return df[present_expected + extras]
+
+    def _align_dim_products(self, df: pd.DataFrame, conn: Any) -> pd.DataFrame:
+        if "International_PowerCord" not in df.columns and "Description" in df.columns:
+            description = df["Description"].astype(str).str.upper()
+            region_match = description.str.contains(
+                r"AFRICA|AUSTRALIA|BRAZIL|CHINA|EURO|EUROPE|INDIA|ISRAEL|JAPAN|SWISS|UK|U\\.K\\.",
+                regex=True,
+                na=False,
+            )
+            cord_match = description.str.contains(
+                r"PWR CORD|PWRCORD|AC CORD|AC POWER CORD|PWR,CORD",
+                regex=True,
+                na=False,
+            )
+            df["International_PowerCord"] = (region_match & cord_match).astype(int)
+
+        if "CustomButton" not in df.columns:
+            prefix_col = self._find_column_case_insensitive(list(df.columns), "PartNumberPrefix")
+            model_col = self._find_column_case_insensitive(list(df.columns), "PartNumberModel")
+            if prefix_col and model_col:
+                allowed_models = {"152", "153", "154", "175", "176", "177", "181", "193", "194", "196", "197"}
+                df["CustomButton"] = (
+                    (df[prefix_col].astype(str) == "18")
+                    & (df[model_col].astype(str).isin(allowed_models))
+                ).astype(int)
+
+        if "Effective Date" not in df.columns and "skDateEffectiveid" in df.columns:
+            try:
+                dim_date = pd.read_sql("SELECT skDateId, DateId FROM [common].[dimDate]", conn)
+                dim_date = dim_date.rename(columns={"DateId": "Effective Date"})
+                df = df.merge(dim_date, how="left", left_on="skDateEffectiveid", right_on="skDateId")
+                if "skDateId" in df.columns:
+                    df = df.drop(columns=["skDateId"])
+            except Exception as exc:
+                logger.warning("Could not derive Effective Date from common.dimDate: %s", exc)
+
+        expected = [
+            "skPartNumberId",
+            "ProductId",
+            "PartNumber",
+            "PartNumberPrefix",
+            "PartNumberModel",
+            "PartNumberSuffix",
+            "Description",
+            "IsTopLevelPart",
+            "IsConfiguredPart",
+            "IsConfiguredPartComponent",
+            "IsSerialized",
+            "IsLinkLicense",
+            "IsPhantomPart",
+            "IsBinItem",
+            "IsWebEnabled",
+            "IsNonPhysical",
+            "Effective Date",
+            "International_PowerCord",
+            "CustomButton",
+        ]
+        present_expected = [column for column in expected if column in df.columns]
+        extras = [column for column in df.columns if column not in present_expected]
+        return df[present_expected + extras]
+
+    def _align_sql_shape(self, table_name: str, df: pd.DataFrame, conn: Any) -> pd.DataFrame:
+        normalized = _normalize_table_name(table_name)
+        if normalized.endswith("operations.obsolescence_results"):
+            return self._align_obsolescence_results(df)
+        if normalized.endswith("production.dimproducts"):
+            return self._align_dim_products(df, conn)
+        return df
+
     # ── public query API ─────────────────────────────────
 
     def list_tables(self) -> list[str]:
@@ -256,6 +375,15 @@ class DataLoader:
     def get_table_roles(self) -> dict[str, str]:
         """Return {table_name: role} for all tables."""
         return dict(self._table_roles)
+
+    def get_tables_by_role(self, role: str) -> list[str]:
+        return [table_name for table_name, table_role in self._table_roles.items() if table_role == role]
+
+    def get_primary_table_name(self) -> str:
+        primary_tables = self.get_tables_by_role("primary")
+        if not primary_tables:
+            raise ValueError("No primary table is loaded.")
+        return primary_tables[0]
 
     def get_schema(self, table_name: str) -> dict[str, str]:
         """Return {column_name: dtype} for a table."""
@@ -311,6 +439,82 @@ class DataLoader:
             "columns": list(result.columns),
         }
 
+    def query_table_with_cross_filter(
+        self,
+        table_name: str,
+        query_expr: str | None = None,
+        supplemental_filters: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Filter a primary table by part numbers matched from supplemental-table filters."""
+        if not supplemental_filters:
+            if query_expr:
+                return self.query_table(table_name, query_expr)
+            return self.get_rows(table_name)
+
+        df = self._get_table(table_name)
+        result = df
+        if query_expr:
+            try:
+                result = result.query(query_expr)
+            except Exception as exc:
+                raise ValueError(f"Invalid query expression: {exc}") from exc
+
+        matching_parts = self._get_matching_parts_for_supplemental_filters(supplemental_filters)
+        if PART_NUMBER_COLUMN not in result.columns:
+            filtered = result.iloc[0:0]
+        else:
+            normalized_parts = result[PART_NUMBER_COLUMN].astype(str).str.strip().str.upper()
+            filtered = result[normalized_parts.isin(matching_parts)]
+
+        return {
+            "table": table_name,
+            "rows": filtered.to_dict(orient="records"),
+            "total": len(filtered),
+            "columns": list(filtered.columns),
+        }
+
+    def get_cross_filtered_frame(
+        self,
+        table_name: str,
+        query_expr: str | None = None,
+        supplemental_filters: dict[str, str] | None = None,
+    ) -> pd.DataFrame:
+        """Return a primary DataFrame merged with matching supplemental rows."""
+        primary_df = self._get_table(table_name).copy()
+        if query_expr:
+            try:
+                primary_df = primary_df.query(query_expr)
+            except Exception as exc:
+                raise ValueError(f"Invalid query expression: {exc}") from exc
+
+        if not supplemental_filters:
+            return primary_df
+
+        supplemental_frames: list[pd.DataFrame] = []
+        for supplemental_table in self.get_tables_by_role("supplemental"):
+            supplemental_df = self._get_table(supplemental_table).copy()
+            if PART_NUMBER_COLUMN not in supplemental_df.columns:
+                continue
+            filtered = supplemental_df
+            for column, value in supplemental_filters.items():
+                filtered = self._apply_filter(filtered, column, value)
+                if filtered.empty:
+                    break
+            if not filtered.empty:
+                supplemental_frames.append(filtered)
+
+        if not supplemental_frames:
+            return primary_df.iloc[0:0].copy()
+
+        combined_supplemental = pd.concat(supplemental_frames, ignore_index=True)
+        combined_supplemental = combined_supplemental.drop_duplicates(subset=[PART_NUMBER_COLUMN], keep="first")
+        return primary_df.merge(
+            combined_supplemental,
+            on=PART_NUMBER_COLUMN,
+            how="inner",
+            suffixes=("", "_supplemental"),
+        )
+
     def group_by(
         self,
         table_name: str,
@@ -331,11 +535,17 @@ class DataLoader:
             )
             result.columns = [group_column, f"{agg_func}_{agg_column}"]
         else:
-            result = df.groupby(group_column).size().reset_index(name="count")
+            result = df.groupby(group_column).size().rename("count").reset_index()
 
         return result.to_dict(orient="records")
 
     # ── helpers ──────────────────────────────────────────
+
+    def clear_filter_cache(self) -> None:
+        self._cross_filter_cache.clear()
+
+    def get_filter_cache_size(self) -> int:
+        return len(self._cross_filter_cache)
 
     def lookup_part(self, part_number: str) -> dict[str, Any]:
         """Look up a part number across all tables that have a PartNumber column."""
@@ -379,6 +589,61 @@ class DataLoader:
             'total': len(matched),
             'columns': list(matched.columns),
         }
+
+    @staticmethod
+    def _normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+        normalized = df.copy()
+        normalized.columns = [str(c).strip() for c in normalized.columns]
+        for column in DATE_COLUMNS.intersection(normalized.columns):
+            normalized[column] = pd.to_datetime(normalized[column], errors="coerce", utc=True)
+        return normalized
+
+    def _get_matching_parts_for_supplemental_filters(
+        self,
+        supplemental_filters: dict[str, str],
+    ) -> frozenset[str]:
+        cache_key = self._build_cross_filter_cache_key(supplemental_filters)
+        cached = self._cross_filter_cache.get(cache_key)
+        if cached is not None:
+            self._cross_filter_cache.move_to_end(cache_key)
+            return cached
+
+        matching_parts: set[str] = set()
+        supplemental_tables = [
+            table_name
+            for table_name, role in self._table_roles.items()
+            if role == "supplemental"
+        ]
+        for supplemental_table in supplemental_tables:
+            supplemental_df = self._get_table(supplemental_table)
+            if PART_NUMBER_COLUMN not in supplemental_df.columns:
+                continue
+            filtered = supplemental_df
+            for column, value in supplemental_filters.items():
+                filtered = self._apply_filter(filtered, column, value)
+                if filtered.empty:
+                    break
+            if filtered.empty:
+                continue
+            matching_parts.update(
+                filtered[PART_NUMBER_COLUMN].dropna().astype(str).str.strip().str.upper().tolist()
+            )
+
+        frozen_parts = frozenset(matching_parts)
+        self._cross_filter_cache[cache_key] = frozen_parts
+        self._cross_filter_cache.move_to_end(cache_key)
+        while len(self._cross_filter_cache) > self._cross_filter_cache_limit:
+            self._cross_filter_cache.popitem(last=False)
+        return frozen_parts
+
+    def _build_cross_filter_cache_key(self, supplemental_filters: dict[str, str]) -> tuple[Any, ...]:
+        normalized_filters = tuple(
+            sorted((str(key).strip().lower(), str(value).strip().lower()) for key, value in supplemental_filters.items())
+        )
+        supplemental_tables = tuple(sorted(
+            table_name for table_name, role in self._table_roles.items() if role == "supplemental"
+        ))
+        return supplemental_tables + normalized_filters
 
 
     def _get_table(self, table_name: str) -> pd.DataFrame:

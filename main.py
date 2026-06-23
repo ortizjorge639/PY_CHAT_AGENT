@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 
 # Ensure the app's own directory is on the import path (required for
 # Azure App Service where Oryx extracts to /tmp/ but doesn't cd into it).
@@ -57,6 +58,7 @@ if settings.applicationinsights_connection_string:
 EASY_AUTH_HEADER = "X-MS-CLIENT-PRINCIPAL-ID"
 EASY_AUTH_PRINCIPAL = "X-MS-CLIENT-PRINCIPAL"
 AUTH_EXEMPT_PATHS = {"/api/messages", "/robots933456.txt"}
+AUTH_EXEMPT_PREFIXES = ("/api/chart-images/",)
 
 
 def _get_user_group_ids(request: web.Request) -> set[str]:
@@ -77,6 +79,10 @@ def _get_user_group_ids(request: web.Request) -> set[str]:
     except Exception as exc:
         logger.warning("Failed to decode %s: %s", EASY_AUTH_PRINCIPAL, exc)
         return set()
+
+
+def _is_auth_exempt_path(path: str) -> bool:
+    return path in AUTH_EXEMPT_PATHS or any(path.startswith(prefix) for prefix in AUTH_EXEMPT_PREFIXES)
 
 
 def _user_can_download(request: web.Request) -> bool:
@@ -132,7 +138,7 @@ def _activity_context(activity: Activity) -> dict[str, str]:
 # The /api/messages endpoint is excluded — Bot Framework has its own auth.
 @web.middleware
 async def easy_auth_middleware(request: web.Request, handler):
-    if request.path not in AUTH_EXEMPT_PATHS and settings.require_auth:
+    if not _is_auth_exempt_path(request.path) and settings.require_auth:
         principal_id = request.headers.get(EASY_AUTH_HEADER)
         if not principal_id:
             logger.warning("Rejected unauthenticated request to %s", request.path)
@@ -189,6 +195,37 @@ def _warmup_message() -> str:
     return "I'm warming up and loading data. Please try again in about 30 seconds."
 
 
+def cleanup_generated_files(directory: str, max_age_hours: int, max_count: int) -> int:
+    now = datetime.now(timezone.utc).timestamp()
+    directory_path = Path(directory)
+    if not directory_path.exists():
+        return 0
+
+    chart_files = [
+        path
+        for path in directory_path.iterdir()
+        if path.is_file() and path.name.startswith("chart_") and path.suffix.lower() == ".png"
+    ]
+    deleted = 0
+    cutoff_seconds = max_age_hours * 3600
+    fresh_files: list[Path] = []
+
+    for path in chart_files:
+        age_seconds = now - path.stat().st_mtime
+        if age_seconds > cutoff_seconds:
+            path.unlink(missing_ok=True)
+            deleted += 1
+        else:
+            fresh_files.append(path)
+
+    fresh_files.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+    for path in fresh_files[max_count:]:
+        path.unlink(missing_ok=True)
+        deleted += 1
+
+    return deleted
+
+
 async def _initialize_components_loop(app: web.Application) -> None:
     """Load data and construct agent in the background with retry on transient startup failures."""
     global agent_kernel, bot
@@ -226,6 +263,13 @@ async def _data_refresh_loop(app: web.Application) -> None:
         if _is_ready():
             logger.info("Auto-refresh: reloading data...")
             data_loader.reload()
+            if settings.chart_cleanup_enabled:
+                deleted = cleanup_generated_files(
+                    GENERATED_DIR,
+                    settings.chart_retention_hours,
+                    settings.chart_max_count,
+                )
+                logger.info("Auto-refresh: cleaned up %d chart file(s)", deleted)
             if agent_kernel:
                 cleared = agent_kernel.reset_all_sessions()
                 logger.info("Auto-refresh: cleared %d conversation session(s)", cleared)
@@ -336,6 +380,7 @@ async def chat_api(req: web.Request) -> web.Response:
                 "reply": "Session reset for this chat. You can continue here with a fresh context.",
                 "data_chunks": [],
                 "files": [],
+                "visualizations": [],
             })
 
         decision = conversation_freshness.evaluate(user_id, conv_id)
@@ -349,6 +394,7 @@ async def chat_api(req: web.Request) -> web.Response:
                 "reply": decision.stale_message,
                 "data_chunks": [],
                 "files": [],
+                "visualizations": [],
             })
 
         if decision.switched_from and decision.switched_to:
@@ -384,6 +430,7 @@ async def chat_api(req: web.Request) -> web.Response:
             "reply": reply["text"],
             "data_chunks": reply.get("data_chunks", []),
             "files": files,
+            "visualizations": reply.get("visualizations", []),
         })
     except Exception as e:
         logger.error("Chat API error: %s", e, exc_info=True)
@@ -427,12 +474,38 @@ async def download_file(req: web.Request) -> web.Response:
     return web.FileResponse(filepath)
 
 
+async def serve_chart_image(req: web.Request) -> web.Response:
+    """GET /api/chart-images/{filename} — serve generated chart PNGs without auth for Teams/web render."""
+    filename = req.match_info["filename"]
+    if Path(filename).name != filename or not filename.startswith("chart_") or not filename.endswith(".png"):
+        return web.Response(status=403, text="Access denied.")
+
+    filepath = os.path.join(GENERATED_DIR, filename)
+    if not os.path.abspath(filepath).startswith(os.path.abspath(GENERATED_DIR)):
+        return web.Response(status=403, text="Access denied.")
+    if not os.path.isfile(filepath):
+        return web.Response(status=404, text="File not found.")
+
+    response = web.FileResponse(filepath)
+    if req.query.get("download") == "true":
+        response.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response.headers["Cache-Control"] = "private, max-age=300"
+    return response
+
+
 # ── Data reload endpoint ──────────────────────────────
 async def reload_data(req: web.Request) -> web.Response:
     """POST /api/reload — trigger a data refresh without restarting the app."""
     if not _is_ready():
         return web.json_response({"status": "error", "message": "App not ready yet"}, status=503)
     data_loader.reload()
+    deleted = 0
+    if settings.chart_cleanup_enabled:
+        deleted = cleanup_generated_files(
+            GENERATED_DIR,
+            settings.chart_retention_hours,
+            settings.chart_max_count,
+        )
     sessions_cleared = agent_kernel.reset_all_sessions() if agent_kernel else 0
     return web.json_response({
         "status": "ok",
@@ -440,6 +513,7 @@ async def reload_data(req: web.Request) -> web.Response:
         "rows_per_table": {t: len(data_loader._tables[t]) for t in data_loader.list_tables()},
         "last_loaded_at": data_loader.last_loaded_at.isoformat() if data_loader.last_loaded_at else None,
         "sessions_cleared": sessions_cleared,
+        "chart_files_deleted": deleted,
     })
 
 
@@ -459,6 +533,7 @@ def main() -> None:
     app.router.add_post("/api/reload", reload_data)
     app.router.add_static("/static", STATIC_DIR)
     app.router.add_get("/api/files/{filename}", download_file)
+    app.router.add_get("/api/chart-images/{filename}", serve_chart_image)
     app.on_startup.append(_on_startup)
     app.on_cleanup.append(_on_cleanup)
 
