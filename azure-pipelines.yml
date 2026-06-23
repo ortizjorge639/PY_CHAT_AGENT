@@ -92,4 +92,4 @@ stages:
         # Mounts the ZIP as read-only wwwroot instead of extracting.
         # Eliminates file-lock conflicts that cause 409 errors during ZIP Deploy.
         deploymentMethod: 'runFromPackage'
-        appSettings: '-GENERATED_DIR /tmp/generated -SCM_DO_BUILD_DURING_DEPLOYMENT 0 -BASE_URL https://$(appServiceName).azurewebsites.net'
+        appSettings: '-GENERATED_DIR /tmp/generated -SCM_DO_BUILD_DURING_DEPLOYMENT 0 -BASE_URL https://$(appServiceName).azurewebsites.net -WEBSITES_CONTAINER_START_TIME_LIMIT 1800'
