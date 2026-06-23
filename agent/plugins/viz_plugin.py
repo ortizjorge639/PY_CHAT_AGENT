@@ -23,6 +23,22 @@ PNG_EXPORT_TIMEOUT_SECONDS = int(os.environ.get("PNG_EXPORT_TIMEOUT_SECONDS", "6
 TEAMS_INLINE_IMAGE_MAX_BYTES = int(os.environ.get("TEAMS_INLINE_IMAGE_MAX_BYTES", "250000"))
 
 
+def _should_treat_as_datetime(series: pd.Series, column_name: str) -> bool:
+    """Heuristic: normalize as datetime when column name or values look date-like."""
+    lowered = (column_name or "").lower()
+    if any(token in lowered for token in ("date", "time", "timestamp")):
+        return True
+
+    non_null = series.dropna()
+    if non_null.empty:
+        return False
+
+    sample = non_null.astype(str).head(100)
+    parsed = pd.to_datetime(sample, errors="coerce", utc=True)
+    parsed_ratio = float(parsed.notna().mean())
+    return parsed_ratio >= 0.8
+
+
 def _cleanup_failed_image(filepath: Path) -> None:
     """Best-effort cleanup for partial PNG files after a failed export."""
     try:
@@ -177,14 +193,24 @@ def create_aggregated_chart(
     working_frame = frame.copy()
     sort_by_x = False
     
-    # Normalize x-axis column for date-based charts
-    if chart_type in {"line", "bar"}:
+    # Normalize x-axis for line/date-like bars; keep categorical bars as strings.
+    if chart_type == "line":
         working_frame[x_column] = pd.to_datetime(working_frame[x_column], errors="coerce", utc=True)
         working_frame = working_frame.dropna(subset=[x_column])
         if working_frame.empty:
             raise ValueError("No chartable rows remain after normalizing the x-axis column.")
         working_frame[x_column] = working_frame[x_column].dt.strftime("%Y-%m-%d")
         sort_by_x = True
+    elif chart_type == "bar":
+        if _should_treat_as_datetime(working_frame[x_column], x_column):
+            working_frame[x_column] = pd.to_datetime(working_frame[x_column], errors="coerce", utc=True)
+            working_frame = working_frame.dropna(subset=[x_column])
+            if working_frame.empty:
+                raise ValueError("No chartable rows remain after normalizing the x-axis column.")
+            working_frame[x_column] = working_frame[x_column].dt.strftime("%Y-%m-%d")
+            sort_by_x = True
+        else:
+            working_frame[x_column] = working_frame[x_column].astype(str)
     else:
         # For pie charts, ensure x_column is string to avoid Timestamp serialization
         working_frame[x_column] = working_frame[x_column].astype(str)
