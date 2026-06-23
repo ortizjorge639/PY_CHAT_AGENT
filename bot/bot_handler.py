@@ -14,10 +14,13 @@ logger = logging.getLogger(__name__)
 def _build_visualization_attachment(
     visualization: dict,
 ) -> Attachment | None:
-    image_url = visualization.get("teams", {}).get("image_url", "")
+    teams_payload = visualization.get("teams", {})
+    image_data_uri = teams_payload.get("image_data_uri", "")
+    image_url = teams_payload.get("image_url", "")
+    image_source = image_data_uri or image_url
     title = visualization.get("title", "Chart")
-    alt_text = visualization.get("teams", {}).get("alt_text", title)
-    if not image_url:
+    alt_text = teams_payload.get("alt_text", title)
+    if not image_source:
         return None
 
     return Attachment(
@@ -35,7 +38,7 @@ def _build_visualization_attachment(
                 },
                 {
                     "type": "Image",
-                    "url": image_url,
+                    "url": image_source,
                     "altText": alt_text,
                     "size": "Stretch",
                 },
@@ -137,7 +140,11 @@ class ChatBot(ActivityHandler):
         await turn_context.send_activity(response["text"])
 
         for visualization in response.get("visualizations", []):
-            has_image = bool(visualization.get("teams", {}).get("image_url", ""))
+            teams_payload = visualization.get("teams", {})
+            has_image = bool(
+                teams_payload.get("image_data_uri", "")
+                or teams_payload.get("image_url", "")
+            )
             attachment = _build_visualization_attachment(visualization)
             if not attachment:
                 logger.info(
@@ -145,11 +152,12 @@ class ChatBot(ActivityHandler):
                     conversation_id,
                 )
                 continue
+            mode = "inline-data-uri" if teams_payload.get("image_data_uri", "") else "image-url"
             logger.info(
                 "Sending visualization attachment for conversation [%s] (title=%s, mode=%s)",
                 conversation_id,
                 visualization.get("title", "Chart"),
-                "image" if has_image else "fallback",
+                mode if has_image else "fallback",
             )
             await turn_context.send_activity(
                 Activity(

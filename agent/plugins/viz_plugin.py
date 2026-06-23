@@ -1,5 +1,6 @@
 """Visualization helpers for chat-friendly chart responses."""
 
+import base64
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
@@ -19,6 +20,7 @@ GENERATED_DIR = os.environ.get(
     os.path.join(os.path.dirname(__file__), "..", "..", "generated"),
 )
 PNG_EXPORT_TIMEOUT_SECONDS = int(os.environ.get("PNG_EXPORT_TIMEOUT_SECONDS", "60"))
+TEAMS_INLINE_IMAGE_MAX_BYTES = int(os.environ.get("TEAMS_INLINE_IMAGE_MAX_BYTES", "250000"))
 
 
 def _cleanup_failed_image(filepath: Path) -> None:
@@ -93,6 +95,7 @@ def _build_chart_payload(
     filepath = output_dir / filename
     image_path = ""
     image_url = ""
+    image_data_uri = ""
     executor = ThreadPoolExecutor(max_workers=1)
     future = executor.submit(figure.write_image, filepath)
     try:
@@ -116,6 +119,24 @@ def _build_chart_payload(
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
 
+    if image_url:
+        try:
+            file_size = filepath.stat().st_size
+            if file_size <= TEAMS_INLINE_IMAGE_MAX_BYTES:
+                with filepath.open("rb") as image_file:
+                    image_bytes = image_file.read()
+                encoded = base64.b64encode(image_bytes).decode("ascii")
+                image_data_uri = f"data:image/png;base64,{encoded}"
+            else:
+                logger.info(
+                    "Skipping inline Teams image embedding for %s (size=%s bytes exceeds limit=%s bytes)",
+                    filename,
+                    file_size,
+                    TEAMS_INLINE_IMAGE_MAX_BYTES,
+                )
+        except Exception as exc:
+            logger.warning("Failed to prepare inline Teams image payload: %s", exc)
+
     web_payload: dict[str, Any] = {
         "plotly_spec": figure.to_plotly_json(),
     }
@@ -129,6 +150,7 @@ def _build_chart_payload(
         "web": web_payload,
         "teams": {
             "image_url": image_url,
+            "image_data_uri": image_data_uri,
             "alt_text": title,
         },
     }
