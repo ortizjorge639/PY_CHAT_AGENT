@@ -88,7 +88,7 @@ stages:
         appName: $(appServiceName)
         package: '$(Pipeline.Workspace)/app-package/app.zip'
         runtimeStack: 'PYTHON|3.11'
-        startUpCommand: '. antenv/bin/activate && python main.py'
+        startUpCommand: 'bash startup.sh'
         # Mounts the ZIP as read-only wwwroot instead of extracting.
         # Eliminates file-lock conflicts that cause 409 errors during ZIP Deploy.
         deploymentMethod: 'runFromPackage'
