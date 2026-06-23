@@ -203,7 +203,11 @@ async def _initialize_components_loop(app: web.Application) -> None:
             logger.info("Startup initialization: loading data...")
             data_loader.load_now()
             agent_kernel = AgentKernel(settings, data_loader)
-            bot = ChatBot(agent_kernel, freshness=conversation_freshness)
+            bot = ChatBot(
+                agent_kernel,
+                freshness=conversation_freshness,
+                base_url=settings.base_url,
+            )
             _startup_state["ready"] = True
             _startup_state["failed"] = False
             _startup_state["last_error"] = ""

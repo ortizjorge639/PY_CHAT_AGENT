@@ -1,6 +1,7 @@
 """Bot Framework activity handler — routes user messages to the AI agent."""
 
 import logging
+from urllib.parse import quote_plus
 
 from botbuilder.core import ActivityHandler, TurnContext
 from botbuilder.schema import Activity, ActivityTypes, Attachment
@@ -11,31 +12,44 @@ from bot.conversation_freshness_skill import ConversationFreshnessSkill
 logger = logging.getLogger(__name__)
 
 
-def _build_visualization_attachment(visualization: dict) -> Attachment | None:
+def _build_visualization_attachment(
+    visualization: dict,
+    *,
+    open_url: str = "",
+) -> Attachment | None:
     image_url = visualization.get("teams", {}).get("image_url", "")
     title = visualization.get("title", "Chart")
     alt_text = visualization.get("teams", {}).get("alt_text", title)
     if not image_url:
+        card: dict = {
+            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+            "type": "AdaptiveCard",
+            "version": "1.4",
+            "body": [
+                {
+                    "type": "TextBlock",
+                    "text": title,
+                    "weight": "Bolder",
+                    "wrap": True,
+                },
+                {
+                    "type": "TextBlock",
+                    "text": "Interactive charts are available in the web UI. Teams image rendering requires PNG export.",
+                    "wrap": True,
+                },
+            ],
+        }
+        if open_url:
+            card["actions"] = [
+                {
+                    "type": "Action.OpenUrl",
+                    "title": "Open Interactive Chart",
+                    "url": open_url,
+                }
+            ]
         return Attachment(
             content_type="application/vnd.microsoft.card.adaptive",
-            content={
-                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                "type": "AdaptiveCard",
-                "version": "1.4",
-                "body": [
-                    {
-                        "type": "TextBlock",
-                        "text": title,
-                        "weight": "Bolder",
-                        "wrap": True,
-                    },
-                    {
-                        "type": "TextBlock",
-                        "text": "Interactive charts are available in the web UI. Teams image rendering requires PNG export.",
-                        "wrap": True,
-                    },
-                ],
-            },
+            content=card,
         )
 
     return Attachment(
@@ -69,11 +83,13 @@ class ChatBot(ActivityHandler):
         self,
         agent: AgentKernel,
         freshness: ConversationFreshnessSkill | None = None,
+        base_url: str = "",
     ) -> None:
         super().__init__()
         self._agent = agent
         self._processed_ids: dict[str, str] = {}  # conversation_id → last activity_id
         self._freshness = freshness or ConversationFreshnessSkill()
+        self._base_url = (base_url or "").rstrip("/")
 
     async def on_message_activity(self, turn_context: TurnContext) -> None:
         """Process each user message through the AI agent."""
@@ -156,7 +172,10 @@ class ChatBot(ActivityHandler):
 
         for visualization in response.get("visualizations", []):
             has_image = bool(visualization.get("teams", {}).get("image_url", ""))
-            attachment = _build_visualization_attachment(visualization)
+            open_url = ""
+            if self._base_url:
+                open_url = f"{self._base_url}/?q={quote_plus(user_text)}"
+            attachment = _build_visualization_attachment(visualization, open_url=open_url)
             if not attachment:
                 logger.info(
                     "Visualization skipped for conversation [%s]: no Teams-compatible payload",
@@ -164,10 +183,11 @@ class ChatBot(ActivityHandler):
                 )
                 continue
             logger.info(
-                "Sending visualization attachment for conversation [%s] (title=%s, mode=%s)",
+                "Sending visualization attachment for conversation [%s] (title=%s, mode=%s, open_url=%s)",
                 conversation_id,
                 visualization.get("title", "Chart"),
                 "image" if has_image else "fallback",
+                bool(open_url),
             )
             await turn_context.send_activity(
                 Activity(

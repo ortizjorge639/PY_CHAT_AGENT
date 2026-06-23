@@ -77,6 +77,7 @@
         const input = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
         const CONV_ID = 'web-' + Date.now();
+        const URL_PARAMS = new URLSearchParams(window.location.search);
 
         function addMessage(text, sender) {
             const div = document.createElement('div');
@@ -185,6 +186,12 @@
             sendBtn.disabled = false;
             input.disabled = false;
             input.focus();
+        }
+
+        const startupQuery = URL_PARAMS.get('q');
+        if (startupQuery) {
+            input.value = startupQuery;
+            sendMessage();
         }
     </script>
 </body>
