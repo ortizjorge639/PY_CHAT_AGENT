@@ -25,15 +25,5 @@ else
     echo ">>> ODBC Driver 18 already present."
 fi
 
-# Install Chromium for Kaleido PNG export (required for chart "Save" functionality)
-if ! command -v chromium-browser &> /dev/null; then
-    echo ">>> Installing Chromium for Kaleido chart export..."
-    apt-get update -qq
-    apt-get install -y --no-install-recommends chromium-browser
-    echo ">>> Chromium installed."
-else
-    echo ">>> Chromium already present."
-fi
-
 echo ">>> Starting application..."
 exec python main.py

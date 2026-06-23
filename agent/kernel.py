@@ -712,7 +712,6 @@ class AgentKernel:
                 y_metric=y_metric,
                 y_column=y_column,
                 title=chart_title,
-                base_url=self._settings.base_url,
             )
             y_label = "count" if y_metric == "count" else f"{y_metric} of {y_column}"
             return {

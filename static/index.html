@@ -124,14 +124,6 @@
 
             const actions = document.createElement('div');
             actions.className = 'chart-actions';
-            if (viz.web && viz.web.save_url) {
-                const link = document.createElement('a');
-                link.href = `${viz.web.save_url}?download=true`;
-                link.textContent = 'Save chart';
-                link.target = '_blank';
-                link.rel = 'noopener noreferrer';
-                actions.appendChild(link);
-            }
             wrapper.appendChild(actions);
 
             chat.appendChild(wrapper);
