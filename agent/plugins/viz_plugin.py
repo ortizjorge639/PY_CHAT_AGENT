@@ -1,7 +1,11 @@
 """Visualization helpers for chat-friendly chart responses."""
 
 import logging
+import os
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -9,6 +13,22 @@ import plotly.graph_objects as go
 from data.loader import CHUNK_SIZE
 
 logger = logging.getLogger(__name__)
+
+GENERATED_DIR = os.environ.get(
+    "GENERATED_DIR",
+    os.path.join(os.path.dirname(__file__), "..", "..", "generated"),
+)
+PNG_EXPORT_TIMEOUT_SECONDS = int(os.environ.get("PNG_EXPORT_TIMEOUT_SECONDS", "20"))
+
+
+def _cleanup_failed_image(filepath: Path) -> None:
+    """Best-effort cleanup for partial PNG files after a failed export."""
+    try:
+        if filepath.exists():
+            filepath.unlink(missing_ok=True)
+    except Exception:
+        # Cleanup failures are non-fatal and should not break chart responses.
+        pass
 
 
 def format_rows_as_markdown_chunks(rows: list[dict], columns: list[str]) -> list[str]:
@@ -65,15 +85,50 @@ def _build_chart_payload(
     *,
     title: str,
     chart_type: str,
+    base_url: str,
 ) -> dict[str, Any]:
-    """Return interactive Plotly chart JSON payload."""
+    output_dir = Path(GENERATED_DIR)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"chart_{uuid4().hex[:12]}.png"
+    filepath = output_dir / filename
+    image_path = ""
+    image_url = ""
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(figure.write_image, filepath)
+    try:
+        future.result(timeout=PNG_EXPORT_TIMEOUT_SECONDS)
+        image_path = f"/api/chart-images/{filename}"
+        image_url = f"{base_url.rstrip('/')}{image_path}" if base_url else image_path
+    except FutureTimeoutError:
+        future.cancel()
+        _cleanup_failed_image(filepath)
+        logger.warning(
+            "Chart PNG export timed out after %ss; returning interactive chart only.",
+            PNG_EXPORT_TIMEOUT_SECONDS,
+        )
+    except Exception as exc:
+        _cleanup_failed_image(filepath)
+        message = str(exc)
+        if "Couldn't close or kill browser subprocess" in message:
+            logger.debug("Kaleido cleanup issue; returning interactive chart only: %s", message)
+        else:
+            logger.warning("Chart PNG export failed; returning interactive chart only: %s", message)
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+    web_payload: dict[str, Any] = {
+        "plotly_spec": figure.to_plotly_json(),
+    }
+    if image_url:
+        web_payload["save_url"] = image_url
+
     return {
         "chart_type": chart_type,
         "title": title,
-        "web": {
-            "plotly_spec": figure.to_plotly_json(),
-        },
+        "image_filename": filename if image_url else "",
+        "web": web_payload,
         "teams": {
+            "image_url": image_url,
             "alt_text": title,
         },
     }
@@ -87,6 +142,7 @@ def create_aggregated_chart(
     y_metric: str,
     y_column: str | None = None,
     title: str,
+    base_url: str = "",
 ) -> dict[str, Any]:
     chart_type = chart_type.lower().strip()
     y_metric = y_metric.lower().strip()
@@ -155,6 +211,7 @@ def create_aggregated_chart(
         figure,
         title=title,
         chart_type=chart_type,
+        base_url=base_url,
     )
 
 
@@ -163,6 +220,7 @@ def create_count_line_chart(
     *,
     x_column: str,
     title: str,
+    base_url: str = "",
 ) -> dict[str, Any]:
     return create_aggregated_chart(
         frame,
@@ -170,4 +228,5 @@ def create_count_line_chart(
         x_column=x_column,
         y_metric="count",
         title=title,
+        base_url=base_url,
     )
