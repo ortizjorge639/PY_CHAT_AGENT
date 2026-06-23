@@ -13,10 +13,31 @@ logger = logging.getLogger(__name__)
 
 def _build_visualization_attachment(visualization: dict) -> Attachment | None:
     image_url = visualization.get("teams", {}).get("image_url", "")
-    if not image_url:
-        return None
     title = visualization.get("title", "Chart")
     alt_text = visualization.get("teams", {}).get("alt_text", title)
+    if not image_url:
+        return Attachment(
+            content_type="application/vnd.microsoft.card.adaptive",
+            content={
+                "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                "type": "AdaptiveCard",
+                "version": "1.4",
+                "body": [
+                    {
+                        "type": "TextBlock",
+                        "text": title,
+                        "weight": "Bolder",
+                        "wrap": True,
+                    },
+                    {
+                        "type": "TextBlock",
+                        "text": "Interactive charts are available in the web UI. Teams image rendering requires PNG export.",
+                        "wrap": True,
+                    },
+                ],
+            },
+        )
+
     return Attachment(
         content_type="application/vnd.microsoft.card.adaptive",
         content={
@@ -134,9 +155,20 @@ class ChatBot(ActivityHandler):
         await turn_context.send_activity(response["text"])
 
         for visualization in response.get("visualizations", []):
+            has_image = bool(visualization.get("teams", {}).get("image_url", ""))
             attachment = _build_visualization_attachment(visualization)
             if not attachment:
+                logger.info(
+                    "Visualization skipped for conversation [%s]: no Teams-compatible payload",
+                    conversation_id,
+                )
                 continue
+            logger.info(
+                "Sending visualization attachment for conversation [%s] (title=%s, mode=%s)",
+                conversation_id,
+                visualization.get("title", "Chart"),
+                "image" if has_image else "fallback",
+            )
             await turn_context.send_activity(
                 Activity(
                     type=ActivityTypes.message,
