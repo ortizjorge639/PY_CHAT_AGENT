@@ -450,6 +450,37 @@ def _extract_chart_x_column(text: str, available_columns: list[str]) -> str:
 
 
 def _extract_chart_metric(text: str, available_columns: list[str]) -> tuple[str, str | None]:
+    def _trim_grouping_phrase(value: str) -> str:
+        return re.split(r"\b(?:by|over|per|across|for)\b", value, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+
+    def _resolve_quantity_alias(value: str) -> str | None:
+        normalized = _normalize_identifier(value)
+        quantity_tokens = ("quantity", "qty", "qoh", "onhand", "on_hand")
+        if not any(token in normalized for token in quantity_tokens):
+            return None
+
+        preferred_exact = ["QOH", "Quantity", "Qty", "QuantityOnHand"]
+        normalized_columns = {_normalize_identifier(column): column for column in available_columns}
+        for candidate in preferred_exact:
+            resolved = normalized_columns.get(_normalize_identifier(candidate))
+            if resolved:
+                return resolved
+
+        for column in available_columns:
+            col_norm = _normalize_identifier(column)
+            if any(token in col_norm for token in quantity_tokens):
+                return column
+        return None
+
+    def _resolve_metric_column_hint(value: str) -> str | None:
+        trimmed = _trim_grouping_phrase(value)
+        if not trimmed:
+            return None
+        alias_resolved = _resolve_quantity_alias(trimmed)
+        if alias_resolved:
+            return alias_resolved
+        return _resolve_column_hint(trimmed, available_columns)
+
     lowered = text.lower()
     if "y axis" in lowered and "count" in lowered:
         return ("count", None)
@@ -467,16 +498,18 @@ def _extract_chart_metric(text: str, available_columns: list[str]) -> tuple[str,
         y_hint = y_axis_match.group(1).strip()
         if _normalize_identifier(y_hint) == "count":
             return ("count", None)
-        resolved = _resolve_column_hint(y_hint, available_columns)
+        resolved = _resolve_metric_column_hint(y_hint)
         if resolved:
             return (metric if metric != "count" else "sum", resolved)
 
     metric_col_match = re.search(r"(?:sum|total|average|avg|mean)(?:\s+of)?\s+([\w\s/\-$']+)", text, flags=re.IGNORECASE)
     if metric_col_match:
-        resolved = _resolve_column_hint(metric_col_match.group(1).strip(), available_columns)
+        resolved = _resolve_metric_column_hint(metric_col_match.group(1).strip())
         if resolved:
             return (metric if metric != "count" else "sum", resolved)
 
+    if metric != "count":
+        return (metric, None)
     return ("count", None)
 
 
