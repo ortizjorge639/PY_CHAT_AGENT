@@ -25,14 +25,18 @@ else
     echo ">>> ODBC Driver 18 already present."
 fi
 
-# Install Chromium for Kaleido PNG export (required for Teams chart image rendering)
-if ! command -v chromium-browser &> /dev/null; then
-    echo ">>> Installing Chromium for Kaleido chart export..."
+# Install Google Chrome for Kaleido PNG export (choreographer backend requires Chrome, not Chromium)
+if ! command -v google-chrome &> /dev/null && ! command -v google-chrome-stable &> /dev/null; then
+    echo ">>> Installing Google Chrome for Kaleido chart export..."
     apt-get update -qq
-    apt-get install -y --no-install-recommends chromium-browser
-    echo ">>> Chromium installed."
+    # Add Google Chrome repository
+    curl -fsSL https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+    echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+    apt-get update -qq
+    apt-get install -y --no-install-recommends google-chrome-stable
+    echo ">>> Google Chrome installed."
 else
-    echo ">>> Chromium already present."
+    echo ">>> Google Chrome already present."
 fi
 
 echo ">>> Starting application..."
