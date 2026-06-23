@@ -18,7 +18,7 @@ GENERATED_DIR = os.environ.get(
     "GENERATED_DIR",
     os.path.join(os.path.dirname(__file__), "..", "..", "generated"),
 )
-PNG_EXPORT_TIMEOUT_SECONDS = int(os.environ.get("PNG_EXPORT_TIMEOUT_SECONDS", "20"))
+PNG_EXPORT_TIMEOUT_SECONDS = int(os.environ.get("PNG_EXPORT_TIMEOUT_SECONDS", "60"))
 
 
 def _cleanup_failed_image(filepath: Path) -> None:
