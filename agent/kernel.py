@@ -5,6 +5,7 @@ Microsoft Agent Framework setup — Azure OpenAI agent with tool calling.
 import asyncio
 import logging
 import re
+import pandas as pd
 from typing import Any
 from typing import Dict, Optional
 
@@ -513,6 +514,43 @@ def _extract_chart_metric(text: str, available_columns: list[str]) -> tuple[str,
     return ("count", None)
 
 
+def _column_has_numeric_data(frame: pd.DataFrame, column_name: str) -> bool:
+    if column_name not in frame.columns:
+        return False
+
+    selected = frame[column_name]
+    if isinstance(selected, pd.Series):
+        return bool(pd.to_numeric(selected, errors="coerce").notna().any())
+
+    if isinstance(selected, pd.DataFrame):
+        for _, series in selected.items():
+            if bool(pd.to_numeric(series, errors="coerce").notna().any()):
+                return True
+    return False
+
+
+def _find_numeric_metric_column(available_columns: list[str], frame: pd.DataFrame) -> str | None:
+    preferred_exact = ("QOH", "Quantity", "Qty", "QuantityOnHand")
+    by_normalized = {_normalize_identifier(column): column for column in available_columns}
+
+    for candidate in preferred_exact:
+        resolved = by_normalized.get(_normalize_identifier(candidate))
+        if resolved and _column_has_numeric_data(frame, resolved):
+            return resolved
+
+    quantity_tokens = ("quantity", "qty", "qoh", "onhand", "on_hand")
+    for column in available_columns:
+        normalized = _normalize_identifier(column)
+        if any(token in normalized for token in quantity_tokens) and _column_has_numeric_data(frame, column):
+            return column
+
+    for column in available_columns:
+        if _column_has_numeric_data(frame, column):
+            return column
+
+    return None
+
+
 def _as_bool_flag(value: object) -> Optional[bool]:
     if isinstance(value, bool):
         return value
@@ -726,13 +764,23 @@ class AgentKernel:
             x_column = _extract_chart_x_column(user_message, list(merged.columns))
             chart_type = _extract_chart_type(user_message)
             y_metric, y_column = _extract_chart_metric(user_message, list(merged.columns))
-            if y_metric in {"sum", "avg"} and not y_column:
-                return {
-                    "text": "Please specify a numeric y-axis column (for example: y axis is QOH).",
-                    "data_chunks": [],
-                    "files": [],
-                    "visualizations": [],
-                }
+            if y_metric in {"sum", "avg"}:
+                if not y_column or not _column_has_numeric_data(merged, y_column):
+                    fallback_column = _find_numeric_metric_column(list(merged.columns), merged)
+                    if fallback_column:
+                        logger.info(
+                            "Chart metric fallback applied: requested y_column=%s, using numeric column=%s",
+                            y_column,
+                            fallback_column,
+                        )
+                        y_column = fallback_column
+                    else:
+                        return {
+                            "text": "Please specify a numeric y-axis column (for example: y axis is QOH).",
+                            "data_chunks": [],
+                            "files": [],
+                            "visualizations": [],
+                        }
             if y_metric == "count":
                 chart_title = f"Count by {x_column}"
             else:
