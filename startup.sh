@@ -26,4 +26,4 @@ else
 fi
 
 echo ">>> Starting application..."
-exec python main_test.py
+exec python main.py
