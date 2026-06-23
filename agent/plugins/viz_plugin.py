@@ -25,6 +25,11 @@ TEAMS_INLINE_IMAGE_MAX_BYTES = int(os.environ.get("TEAMS_INLINE_IMAGE_MAX_BYTES"
 
 def _should_treat_as_datetime(series: pd.Series, column_name: str) -> bool:
     """Heuristic: normalize as datetime when column name or values look date-like."""
+    if isinstance(series, pd.DataFrame):
+        if series.empty:
+            return False
+        series = series.iloc[:, 0]
+
     lowered = (column_name or "").lower()
     if any(token in lowered for token in ("date", "time", "timestamp")):
         return True
@@ -37,6 +42,38 @@ def _should_treat_as_datetime(series: pd.Series, column_name: str) -> bool:
     parsed = pd.to_datetime(sample, errors="coerce", utc=True)
     parsed_ratio = float(parsed.notna().mean())
     return parsed_ratio >= 0.8
+
+
+def _select_column_series(
+    frame: pd.DataFrame,
+    column_name: str,
+    *,
+    numeric: bool = False,
+) -> pd.Series:
+    """Select a single Series for a column, even when duplicate labels exist."""
+    selected = frame[column_name]
+    if isinstance(selected, pd.Series):
+        return pd.to_numeric(selected, errors="coerce") if numeric else selected
+
+    # Duplicate column labels return a DataFrame; choose best numeric candidate for y-axis.
+    if selected.empty:
+        return pd.Series(dtype="float64" if numeric else "object")
+
+    if not numeric:
+        return selected.iloc[:, 0]
+
+    best_series = None
+    best_non_null = -1
+    for _, series in selected.items():
+        coerced = pd.to_numeric(series, errors="coerce")
+        non_null_count = int(coerced.notna().sum())
+        if non_null_count > best_non_null:
+            best_non_null = non_null_count
+            best_series = coerced
+
+    if best_series is None:
+        return pd.to_numeric(selected.iloc[:, 0], errors="coerce")
+    return best_series
 
 
 def _cleanup_failed_image(filepath: Path) -> None:
@@ -74,24 +111,28 @@ def _build_aggregated_series(
     if x_column not in frame.columns:
         raise ValueError(f"Column '{x_column}' was not found in the chart frame.")
 
-    working = frame[[x_column] + ([y_column] if y_column else [])].copy()
-    working = working.dropna(subset=[x_column])
+    x_key = "_x"
+    y_key = "_y"
+    working = pd.DataFrame({x_key: _select_column_series(frame, x_column, numeric=False)})
+    working = working.dropna(subset=[x_key])
     if working.empty:
         raise ValueError("No chartable rows remain after filtering null x-axis values.")
 
     if y_metric == "count":
-        grouped = working.groupby(x_column).size().rename("value").reset_index()
+        grouped = working.groupby(x_key).size().rename("value").reset_index()
     else:
         if not y_column:
             raise ValueError("A y-axis column is required for sum/avg charts.")
         if y_column not in frame.columns:
             raise ValueError(f"Column '{y_column}' was not found in the chart frame.")
-        working[y_column] = pd.to_numeric(working[y_column], errors="coerce")
-        working = working.dropna(subset=[y_column])
+        working[y_key] = _select_column_series(frame, y_column, numeric=True)
+        working = working.dropna(subset=[y_key])
         if working.empty:
             raise ValueError(f"No numeric rows remain for y-axis column '{y_column}'.")
         agg_name = "sum" if y_metric == "sum" else "mean"
-        grouped = working.groupby(x_column)[y_column].agg(agg_name).rename("value").reset_index()
+        grouped = working.groupby(x_key)[y_key].agg(agg_name).rename("value").reset_index()
+
+    grouped = grouped.rename(columns={x_key: x_column})
 
     if sort_by_x:
         grouped = grouped.sort_values(by=x_column)
