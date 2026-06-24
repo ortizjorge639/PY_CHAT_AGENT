@@ -40,7 +40,8 @@ Data sources:
 DOMAIN KNOWLEDGE
 ----------------------------------------------------------------
 PRIMARY TABLE (scrap-eligibility):
-  PartNumber, Status, Details, Processed_Date, QOH, Reza's List
+    PartNumber, P/C Phase, DateAdded, QOH, Obsolete Reserve$, Nikhol's Comment,
+    Status, Details, RevisionLevel, Accounting List, Processed_Date
 
 SUPPLEMENTAL TABLE — production.dimProducts (product catalogue):
   PartNumber, Description, Phase,
@@ -48,7 +49,7 @@ SUPPLEMENTAL TABLE — production.dimProducts (product catalogue):
   IsSerialized, IsLinkLicense, IsPhantomPart, IsBinItem,
   IsWebEnabled, IsNonPhysical,
   International_PowerCord, CustomButton,
-  Effective Date, DateAdded,
+    Effective Date,
   PartNumberPrefix, PartNumberModel, PartNumberSuffix
 
 - Each row represents exactly one unique PartNumber.
@@ -134,11 +135,16 @@ SYSTEM CONSTRAINTS
 
 Allowed columns (primary table):
 - PartNumber
+- P/C Phase
+- DateAdded
+- Obsolete Reserve$
+- Nikhol's Comment
 - Status
 - Details
+- RevisionLevel
+- Accounting List
 - Processed_Date
 - QOH
-- Reza's List
 
 Allowed columns (supplemental table — production.dimProducts):
 - PartNumber
@@ -148,7 +154,7 @@ Allowed columns (supplemental table — production.dimProducts):
 - IsSerialized, IsLinkLicense, IsPhantomPart, IsBinItem
 - IsWebEnabled, IsNonPhysical
 - International_PowerCord, CustomButton
-- Effective Date, DateAdded
+- Effective Date
 - PartNumberPrefix, PartNumberModel, PartNumberSuffix
 
 ----------------------------------------------------------------
@@ -202,6 +208,7 @@ MODEL_PROCESSED_DATE_ALIASES = ("model processed date", "modelprocesseddate")
 TREND_ALIASES = ("trend", "over time")
 BAR_ALIASES = ("bar", "column", "histogram")
 PIE_ALIASES = ("pie", "donut", "doughnut")
+YEAR_GRANULARITY_ALIASES = ("by year", "per year", "yearly", "annual")
 
 PRIMARY_STATUS_KEYWORDS: tuple[tuple[tuple[str, ...], str], ...] = (
     (("product usage",), "Product USAGE"),
@@ -378,6 +385,13 @@ def _extract_chart_type(text: str) -> str:
     if any(alias in lowered for alias in BAR_ALIASES):
         return "bar"
     return "line"
+
+
+def _extract_time_granularity(text: str) -> str | None:
+    lowered = text.lower()
+    if any(alias in lowered for alias in YEAR_GRANULARITY_ALIASES):
+        return "year"
+    return None
 
 
 def _normalize_identifier(value: str) -> str:
@@ -727,10 +741,26 @@ class AgentKernel:
         query_expr = _build_primary_query_expr(user_message, wants_scrap)
 
         if wants_chart:
+            primary_columns = list(self._data_loader.get_schema(primary_table).keys())
+            supplemental_columns = self._data_loader.get_columns_by_role("supplemental")
+            available_columns = list(dict.fromkeys(primary_columns + supplemental_columns))
+
+            x_column = _extract_chart_x_column(user_message, available_columns)
+            chart_type = _extract_chart_type(user_message)
+            y_metric, y_column = _extract_chart_metric(user_message, available_columns)
+            x_granularity = _extract_time_granularity(user_message)
+
+            needs_supplemental_merge = bool(supplemental_filters)
+            if x_column in supplemental_columns:
+                needs_supplemental_merge = True
+            if y_column and y_column in supplemental_columns:
+                needs_supplemental_merge = True
+
             merged = self._data_loader.get_cross_filtered_frame(
                 primary_table,
                 query_expr=query_expr,
                 supplemental_filters=supplemental_filters or None,
+                include_all_supplemental=needs_supplemental_merge,
             )
             if _requested_date_added(user_message):
                 has_date_added = any(column in merged.columns for column in ("DateAdded", "DateAdded_supplemental"))
@@ -761,19 +791,20 @@ class AgentKernel:
                     "files": [],
                     "visualizations": [],
                 }
-            x_column = _extract_chart_x_column(user_message, list(merged.columns))
-            chart_type = _extract_chart_type(user_message)
-            y_metric, y_column = _extract_chart_metric(user_message, list(merged.columns))
+
+            # Resolve column hints against actual merged-frame columns after joins/suffixes.
+            resolved_x_column = _resolve_column_hint(x_column, list(merged.columns)) or x_column
+            resolved_y_column = _resolve_column_hint(y_column, list(merged.columns)) if y_column else None
             if y_metric in {"sum", "avg"}:
-                if not y_column or not _column_has_numeric_data(merged, y_column):
+                if not resolved_y_column or not _column_has_numeric_data(merged, resolved_y_column):
                     fallback_column = _find_numeric_metric_column(list(merged.columns), merged)
                     if fallback_column:
                         logger.info(
                             "Chart metric fallback applied: requested y_column=%s, using numeric column=%s",
-                            y_column,
+                            resolved_y_column,
                             fallback_column,
                         )
-                        y_column = fallback_column
+                        resolved_y_column = fallback_column
                     else:
                         return {
                             "text": "Please specify a numeric y-axis column (for example: y axis is QOH).",
@@ -782,22 +813,23 @@ class AgentKernel:
                             "visualizations": [],
                         }
             if y_metric == "count":
-                chart_title = f"Count by {x_column}"
+                chart_title = f"Count by {resolved_x_column}"
             else:
-                chart_title = f"{y_metric.upper()}({y_column}) by {x_column}"
+                chart_title = f"{y_metric.upper()}({resolved_y_column}) by {resolved_x_column}"
 
             visualization = create_aggregated_chart(
                 merged,
                 chart_type=chart_type,
-                x_column=x_column,
+                x_column=resolved_x_column,
                 y_metric=y_metric,
-                y_column=y_column,
+                y_column=resolved_y_column,
                 title=chart_title,
                 base_url=self._settings.base_url,
+                x_time_granularity=x_granularity,
             )
-            y_label = "count" if y_metric == "count" else f"{y_metric} of {y_column}"
+            y_label = "count" if y_metric == "count" else f"{y_metric} of {resolved_y_column}"
             return {
-                "text": f"Created a {chart_type} chart with {x_column} on the x-axis and {y_label} on the y-axis.",
+                "text": f"Created a {chart_type} chart with {resolved_x_column} on the x-axis and {y_label} on the y-axis.",
                 "data_chunks": [],
                 "files": [],
                 "visualizations": [visualization],

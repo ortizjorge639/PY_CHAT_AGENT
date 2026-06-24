@@ -285,6 +285,7 @@ def create_aggregated_chart(
     y_column: str | None = None,
     title: str,
     base_url: str = "",
+    x_time_granularity: str | None = None,
 ) -> dict[str, Any]:
     chart_type = chart_type.lower().strip()
     y_metric = y_metric.lower().strip()
@@ -303,7 +304,10 @@ def create_aggregated_chart(
         working_frame = working_frame.dropna(subset=[x_column])
         if working_frame.empty:
             raise ValueError("No chartable rows remain after normalizing the x-axis column.")
-        working_frame[x_column] = working_frame[x_column].dt.strftime("%Y-%m-%d")
+        if x_time_granularity == "year":
+            working_frame[x_column] = working_frame[x_column].dt.strftime("%Y")
+        else:
+            working_frame[x_column] = working_frame[x_column].dt.strftime("%Y-%m-%d")
         sort_by_x = True
     elif chart_type == "bar":
         if _should_treat_as_datetime(working_frame[x_column], x_column):
@@ -311,7 +315,10 @@ def create_aggregated_chart(
             working_frame = working_frame.dropna(subset=[x_column])
             if working_frame.empty:
                 raise ValueError("No chartable rows remain after normalizing the x-axis column.")
-            working_frame[x_column] = working_frame[x_column].dt.strftime("%Y-%m-%d")
+            if x_time_granularity == "year":
+                working_frame[x_column] = working_frame[x_column].dt.strftime("%Y")
+            else:
+                working_frame[x_column] = working_frame[x_column].dt.strftime("%Y-%m-%d")
             sort_by_x = True
         else:
             working_frame[x_column] = working_frame[x_column].astype(str)

@@ -379,6 +379,21 @@ class DataLoader:
     def get_tables_by_role(self, role: str) -> list[str]:
         return [table_name for table_name, table_role in self._table_roles.items() if table_role == role]
 
+    def get_columns_by_role(self, role: str) -> list[str]:
+        """Return unique column names for tables in a role, preserving first-seen order."""
+        columns: list[str] = []
+        seen: set[str] = set()
+        for table_name in self.get_tables_by_role(role):
+            table = self._tables.get(table_name)
+            if table is None:
+                continue
+            for column in table.columns:
+                if column in seen:
+                    continue
+                seen.add(str(column))
+                columns.append(str(column))
+        return columns
+
     def get_primary_table_name(self) -> str:
         primary_tables = self.get_tables_by_role("primary")
         if not primary_tables:
@@ -478,6 +493,7 @@ class DataLoader:
         table_name: str,
         query_expr: str | None = None,
         supplemental_filters: dict[str, str] | None = None,
+        include_all_supplemental: bool = False,
     ) -> pd.DataFrame:
         """Return a primary DataFrame merged with matching supplemental rows."""
         primary_df = self._get_table(table_name).copy()
@@ -487,7 +503,7 @@ class DataLoader:
             except Exception as exc:
                 raise ValueError(f"Invalid query expression: {exc}") from exc
 
-        if not supplemental_filters:
+        if not supplemental_filters and not include_all_supplemental:
             return primary_df
 
         supplemental_frames: list[pd.DataFrame] = []
@@ -496,10 +512,11 @@ class DataLoader:
             if PART_NUMBER_COLUMN not in supplemental_df.columns:
                 continue
             filtered = supplemental_df
-            for column, value in supplemental_filters.items():
-                filtered = self._apply_filter(filtered, column, value)
-                if filtered.empty:
-                    break
+            if supplemental_filters:
+                for column, value in supplemental_filters.items():
+                    filtered = self._apply_filter(filtered, column, value)
+                    if filtered.empty:
+                        break
             if not filtered.empty:
                 supplemental_frames.append(filtered)
 
