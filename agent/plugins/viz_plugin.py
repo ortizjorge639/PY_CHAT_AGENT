@@ -21,6 +21,21 @@ GENERATED_DIR = os.environ.get(
 )
 PNG_EXPORT_TIMEOUT_SECONDS = int(os.environ.get("PNG_EXPORT_TIMEOUT_SECONDS", "60"))
 TEAMS_INLINE_IMAGE_MAX_BYTES = int(os.environ.get("TEAMS_INLINE_IMAGE_MAX_BYTES", "250000"))
+PNG_EXPORT_FALLBACK_TIMEOUT_SECONDS = int(
+    os.environ.get("PNG_EXPORT_FALLBACK_TIMEOUT_SECONDS", str(max(15, PNG_EXPORT_TIMEOUT_SECONDS // 2)))
+)
+
+
+def _looks_date_like(values: pd.Series) -> bool:
+    """Fast lexical check before expensive datetime parsing."""
+    if values.empty:
+        return False
+    text = values.astype(str).str.strip()
+    # Date-like strings usually contain separators or compact numeric date tokens.
+    has_separator = text.str.contains(r"[-/:]", regex=True)
+    has_digit = text.str.contains(r"\d", regex=True)
+    probable = has_digit & (has_separator | text.str.match(r"^\d{8}$"))
+    return float(probable.mean()) >= 0.6
 
 
 def _should_treat_as_datetime(series: pd.Series, column_name: str) -> bool:
@@ -39,9 +54,40 @@ def _should_treat_as_datetime(series: pd.Series, column_name: str) -> bool:
         return False
 
     sample = non_null.astype(str).head(100)
+    if not _looks_date_like(sample):
+        return False
+
     parsed = pd.to_datetime(sample, errors="coerce", utc=True)
     parsed_ratio = float(parsed.notna().mean())
     return parsed_ratio >= 0.8
+
+
+def _export_png_with_timeout(
+    figure: go.Figure,
+    filepath: Path,
+    *,
+    timeout_seconds: int,
+    width: int,
+    height: int,
+    scale: int,
+) -> bool:
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(
+        figure.write_image,
+        filepath,
+        width=width,
+        height=height,
+        scale=scale,
+    )
+    try:
+        future.result(timeout=timeout_seconds)
+        return True
+    except FutureTimeoutError:
+        future.cancel()
+        _cleanup_failed_image(filepath)
+        return False
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def _select_column_series(
@@ -153,19 +199,38 @@ def _build_chart_payload(
     image_path = ""
     image_url = ""
     image_data_uri = ""
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(figure.write_image, filepath)
     try:
-        future.result(timeout=PNG_EXPORT_TIMEOUT_SECONDS)
-        image_path = f"/api/chart-images/{filename}"
-        image_url = f"{base_url.rstrip('/')}{image_path}" if base_url else image_path
-    except FutureTimeoutError:
-        future.cancel()
-        _cleanup_failed_image(filepath)
-        logger.warning(
-            "Chart PNG export timed out after %ss; returning interactive chart only.",
-            PNG_EXPORT_TIMEOUT_SECONDS,
+        export_ok = _export_png_with_timeout(
+            figure,
+            filepath,
+            timeout_seconds=PNG_EXPORT_TIMEOUT_SECONDS,
+            width=1200,
+            height=700,
+            scale=1,
         )
+
+        if not export_ok:
+            logger.warning(
+                "Chart PNG export timed out after %ss; retrying with compact fallback render.",
+                PNG_EXPORT_TIMEOUT_SECONDS,
+            )
+            export_ok = _export_png_with_timeout(
+                figure,
+                filepath,
+                timeout_seconds=PNG_EXPORT_FALLBACK_TIMEOUT_SECONDS,
+                width=900,
+                height=500,
+                scale=1,
+            )
+
+        if not export_ok:
+            logger.warning(
+                "Chart PNG fallback export timed out after %ss; returning interactive chart only.",
+                PNG_EXPORT_FALLBACK_TIMEOUT_SECONDS,
+            )
+        else:
+            image_path = f"/api/chart-images/{filename}"
+            image_url = f"{base_url.rstrip('/')}{image_path}" if base_url else image_path
     except Exception as exc:
         _cleanup_failed_image(filepath)
         message = str(exc)
@@ -173,8 +238,6 @@ def _build_chart_payload(
             logger.debug("Kaleido cleanup issue; returning interactive chart only: %s", message)
         else:
             logger.warning("Chart PNG export failed; returning interactive chart only: %s", message)
-    finally:
-        executor.shutdown(wait=False, cancel_futures=True)
 
     if image_url:
         try:
